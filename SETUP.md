@@ -33,23 +33,25 @@ código do app (`src/lib/supabase.ts` usa só a `publishable`).
 
 ## Supabase
 
-- Projeto: `apyfxpegxjfgznmfvqzq` (https://supabase.com/dashboard/project/apyfxpegxjfgznmfvqzq)
+- Projeto: `apyfxpegxjfgznmfvqzq` — "arcoalianca's Project", org `oetppdvwfzmcsjmweggd`
+  (https://supabase.com/dashboard/project/apyfxpegxjfgznmfvqzq)
 - Client do app: `src/lib/supabase.ts` (criado, ainda não usado em nenhuma tela — o MVP
   é local-first; entra quando o produto precisar de sync entre aparelhos ou login).
-- **Pendência**: a Supabase CLI nesta máquina está logada numa conta que não tem acesso a
-  esse projeto (`supabase link` falhou com erro de permissão). Pra usar a CLI de verdade
-  neste projeto (migrations via `supabase db push`, `supabase link`, etc.), rode
-  `supabase login` de novo escolhendo a conta dona desse projeto, depois:
-  ```bash
-  supabase link --project-ref apyfxpegxjfgznmfvqzq
-  ```
+- CLI local já autenticada e linkada (`supabase link --project-ref apyfxpegxjfgznmfvqzq`)
+  via personal access token (`sbp_...`) dessa conta específica — **diferente** da conta
+  usada nos outros projetos desta máquina. Isso trocou o *perfil padrão* da CLI
+  globalmente (não é isolado por pasta). Se algum outro projeto Supabase nesta máquina
+  parar de enxergar os próprios projetos, é por causa disso — rode `supabase login` de
+  novo com o token daquela outra conta pra trocar de volta.
+- `supabase/config.toml` versionado; `supabase/.temp/` (cache do link, local por máquina)
+  fica de fora do git pelo `supabase/.gitignore` que o próprio `supabase init` criou.
+  Ou seja: quem clonar este repo numa máquina nova precisa rodar
+  `supabase link --project-ref apyfxpegxjfgznmfvqzq` de novo (autenticado na conta certa)
+  antes de usar comandos de schema/migration.
+- Ainda sem nenhuma tabela/migration — o MVP não usa o Supabase de verdade ainda.
 
 ## GitHub
 
 - Repositório: https://github.com/GabrielScrin/educador-fisico-app (privado)
-- **Pendência**: o `gh` CLI local não está autenticado (`gh auth status` falha), então o
-  `git push` ainda não foi feito — só existe local. Rode `gh auth login` (login via
-  navegador) e depois:
-  ```bash
-  git push -u origin main
-  ```
+- `gh` autenticado localmente (conta GabrielScrin) e `git push -u origin main` já feito —
+  histórico local e remoto sincronizados.
