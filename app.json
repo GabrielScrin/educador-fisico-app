@@ -8,9 +8,11 @@
     "scheme": "educadorfisicoapp",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.educadorfisico.app"
     },
     "android": {
+      "package": "com.educadorfisico.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -38,6 +40,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "14cfe4f5-e6dc-4b04-aef5-05488c872cfe"
+      }
+    },
+    "owner": "gabrielscrin"
   }
 }
