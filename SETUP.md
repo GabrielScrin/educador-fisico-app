@@ -25,6 +25,7 @@ Copie `.env.example` para `.env` e preencha. **O `.env` nunca é commitado** (es
 | `EXPO_PUBLIC_SUPABASE_URL` | Dashboard do projeto Supabase → Settings → API | Sim |
 | `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Idem (chave `publishable`, novo formato) | Sim |
 | `SUPABASE_SECRET_KEY` | Idem (chave `secret`, novo formato) | **Não** — só scripts/CLI locais |
+| `SUPABASE_ACCESS_TOKEN` | Dashboard → sua conta → Access Tokens (`sbp_...`) | **Não** — só CLI, por comando (ver abaixo) |
 
 Qualquer variável prefixada com `EXPO_PUBLIC_` é embutida no bundle do app (extraível de
 dentro do APK/IPA por qualquer pessoa). Por isso a chave secreta **nunca** leva esse
@@ -37,18 +38,32 @@ código do app (`src/lib/supabase.ts` usa só a `publishable`).
   (https://supabase.com/dashboard/project/apyfxpegxjfgznmfvqzq)
 - Client do app: `src/lib/supabase.ts` (criado, ainda não usado em nenhuma tela — o MVP
   é local-first; entra quando o produto precisar de sync entre aparelhos ou login).
-- CLI local já autenticada e linkada (`supabase link --project-ref apyfxpegxjfgznmfvqzq`)
-  via personal access token (`sbp_...`) dessa conta específica — **diferente** da conta
-  usada nos outros projetos desta máquina. Isso trocou o *perfil padrão* da CLI
-  globalmente (não é isolado por pasta). Se algum outro projeto Supabase nesta máquina
-  parar de enxergar os próprios projetos, é por causa disso — rode `supabase login` de
-  novo com o token daquela outra conta pra trocar de volta.
+- **⚠️ NUNCA rode `supabase login` puro neste projeto.** Essa conta (`sbp_...` acima) é
+  diferente da conta usada nos outros ~20 projetos Supabase desta máquina — `supabase
+  login` grava a credencial como sessão *padrão global* da CLI, o que troca a conta ativa
+  pra TODOS os projetos ao mesmo tempo (já aconteceu uma vez, foi revertido com
+  `supabase logout`). O jeito seguro é passar o token só na variável de ambiente **daquele
+  comando específico**, sem tocar no login global:
+  ```bash
+  # bash
+  SUPABASE_ACCESS_TOKEN=sbp_... supabase link --project-ref apyfxpegxjfgznmfvqzq
+  SUPABASE_ACCESS_TOKEN=sbp_... supabase db push
+  ```
+  ```powershell
+  # PowerShell — só nessa janela de terminal, não persiste
+  $env:SUPABASE_ACCESS_TOKEN = "sbp_..."
+  supabase db push
+  ```
+  O token já está salvo em `.env` (`SUPABASE_ACCESS_TOKEN`) só como referência local —
+  a CLI não lê `.env` sozinha, então sempre precisa passar explícito como acima.
 - `supabase/config.toml` versionado; `supabase/.temp/` (cache do link, local por máquina)
   fica de fora do git pelo `supabase/.gitignore` que o próprio `supabase init` criou.
-  Ou seja: quem clonar este repo numa máquina nova precisa rodar
-  `supabase link --project-ref apyfxpegxjfgznmfvqzq` de novo (autenticado na conta certa)
-  antes de usar comandos de schema/migration.
+  O link em si (`supabase/.temp/project-ref`) já está feito nesta máquina; numa máquina
+  nova, rode o `supabase link` do bloco acima de novo antes de usar comandos de schema.
 - Ainda sem nenhuma tabela/migration — o MVP não usa o Supabase de verdade ainda.
+- **Alternativa mais segura pro futuro**: reconectar o connector Supabase do Claude
+  (Configurações do Claude → Connectors) pra essa conta específica, aí dá pra gerenciar
+  schema por ali sem precisar de CLI nem token nenhum guardado em arquivo.
 
 ## GitHub
 
