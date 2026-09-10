@@ -66,7 +66,7 @@ export default function ListaClientes() {
         />
 
         <Link href="/cliente/novo" asChild>
-          <Pressable style={[styles.botaoNovo, { backgroundColor: theme.accent }]}>
+          <Pressable style={{ ...styles.botaoNovo, backgroundColor: theme.accent }}>
             <ThemedText type="smallBold" style={{ color: '#F4EFE8' }}>
               + Novo cliente
             </ThemedText>
