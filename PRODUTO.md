@@ -1,9 +1,10 @@
 # Educador Físico — Visão do produto
 
 > Documento de referência sobre do que o app se trata, de ponta a ponta — o que já existe e o
-> que a ideia prevê como versão completa. Serve de base pra decisões de UX/visual (ver também
-> o debriefing visual gerado em 2026-09-10) e pra qualquer pessoa nova que precise entender o
-> produto sem reconstruir o contexto lendo código.
+> que a ideia prevê como versão completa. Serve de base pra decisões de UX/visual e pra qualquer
+> pessoa nova que precise entender o produto sem reconstruir o contexto lendo código. Para o
+> complemento técnico (estrutura de código, armadilhas conhecidas, comandos), ver
+> `ARQUITETURA.md`.
 
 ## O que é
 
