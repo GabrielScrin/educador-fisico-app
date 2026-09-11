@@ -49,6 +49,30 @@ verdade contra o SQLite.
   "Finalizar" gravar direto — dá espaço pra revisar/editar a nota clínica e ver os agregados da
   sessão antes de consolidar. `finalizarSessao` (que grava `finalizada_em`) só é chamado ali.
 
+## Teste no device — pendente, build específico a usar
+
+Rodei `eas build --platform android --profile development` nesta sessão e o build terminou
+(`FINISHED`). **Ninguém instalou nem abriu esse build ainda — o usuário pediu explicitamente pra
+deixar a instalação e o teste pendentes.**
+
+- Build a testar (é o que tem as telas novas e os caminhos novos — `(tabs)`, `treino-ativo`,
+  `evolucao`, `ajustes`, `sessao/[id]/resumo`, `escalas`): id `55ce6c2a-b4b9-4e33-9e82-a0a4cbab17a7`,
+  gerado a partir do commit `48eb61b` (o do `ARQUITETURA.md`/`PASSAGEM_DE_PLANTAO.md`, que já
+  inclui todo o trabalho desta sessão).
+  - Página do build (com QR code): https://expo.dev/accounts/gabrielscrin/projects/educador-fisico-app/builds/55ce6c2a-b4b9-4e33-9e82-a0a4cbab17a7
+  - APK direto: https://expo.dev/artifacts/eas/0CIfjPl1ac_-xhp9AsVHceN3kP1k_ilr_CrQPjEHvDk.apk
+  - Cópia local (scratchpad desta sessão, pode não sobreviver entre sessões):
+    `educador-fisico-app-dev.apk` (265 MB), baixado 2026-09-10 22:51.
+- **Existe um APK mais antigo, de uma sessão anterior no mesmo dia (scratchpad com outro ID,
+  baixado 12:42)** — esse é de **antes** da navegação em abas existir, não usar pra validar o
+  trabalho desta sessão. Se for reaproveitar aquele device/instalação, desinstalar a versão
+  antiga primeiro (mesmo `applicationId`, `com.educadorfisico.app` — um `eas build:run`/instalação
+  nova por cima deve sobrescrever, mas confirmar visualmente que as abas aparecem antes de dar
+  como testado).
+- Quando for testar: seguir a seção "Verificação visual real via screenshot por `adb`" do
+  `ARQUITETURA.md` — instalar, abrir, `adb exec-out screencap` pra confirmar visualmente cada
+  aba/tela nova, não só "abriu sem crash".
+
 ## Pontos de atenção
 
 1. **Não testei em device físico nem emulador nesta sessão** — validação foi só `tsc --noEmit` +
@@ -67,8 +91,9 @@ verdade contra o SQLite.
 
 ## O que falta
 
-- Testar de ponta a ponta em device físico (nenhuma das telas novas/reskinadas foi vista rodando
-  de verdade ainda — só validado por bundle).
+- Testar de ponta a ponta em device físico — ver seção "Teste no device — pendente" acima pro
+  build exato a usar (nenhuma das telas novas/reskinadas foi vista rodando de verdade ainda, só
+  validado por bundle).
 - Gaps antigos que continuam de pé (não mudaram nesta sessão): FC via Bluetooth, login/sync com
   Supabase, editar ou excluir cliente/sessão/leitura, transcrição de voz na nota.
 
