@@ -4,9 +4,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 
+import { MaterialSymbol } from '@/components/material-symbol';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { criarCliente } from '@/db/queries';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -27,45 +28,58 @@ export default function NovoCliente() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.campo}>
-          <ThemedText type="small" themeColor="textSecondary">
-            Nome
-          </ThemedText>
-          <TextInput
-            value={nome}
-            onChangeText={setNome}
-            placeholder="Nome do cliente"
-            placeholderTextColor={theme.textSecondary}
-            autoFocus
-            style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
-          />
+        <View style={[styles.header, { borderBottomColor: theme.border }]}>
+          <ThemedText type="subtitle">Novo cliente</ThemedText>
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={12}
+            style={[styles.headerBotao, { backgroundColor: theme.backgroundElement }]}
+          >
+            <MaterialSymbol name="close" size={20} color={theme.textSecondary} />
+          </Pressable>
         </View>
 
-        <View style={styles.campo}>
-          <ThemedText type="small" themeColor="textSecondary">
-            Contato (opcional)
-          </ThemedText>
-          <TextInput
-            value={contato}
-            onChangeText={setContato}
-            placeholder="WhatsApp, e-mail..."
-            placeholderTextColor={theme.textSecondary}
-            style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
-          />
-        </View>
+        <View style={styles.form}>
+          <View style={styles.campo}>
+            <ThemedText type="label" themeColor="textMuted">
+              Nome
+            </ThemedText>
+            <TextInput
+              value={nome}
+              onChangeText={setNome}
+              placeholder="Nome do cliente"
+              placeholderTextColor={theme.textMuted}
+              autoFocus
+              style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
+            />
+          </View>
 
-        <Pressable
-          onPress={salvar}
-          disabled={!nome.trim() || salvando}
-          style={[
-            styles.botao,
-            { backgroundColor: theme.accent, opacity: !nome.trim() || salvando ? 0.5 : 1 },
-          ]}
-        >
-          <ThemedText type="smallBold" style={{ color: '#F4EFE8' }}>
-            Salvar cliente
-          </ThemedText>
-        </Pressable>
+          <View style={styles.campo}>
+            <ThemedText type="label" themeColor="textMuted">
+              Contato (opcional)
+            </ThemedText>
+            <TextInput
+              value={contato}
+              onChangeText={setContato}
+              placeholder="WhatsApp, e-mail..."
+              placeholderTextColor={theme.textMuted}
+              style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
+            />
+          </View>
+
+          <Pressable
+            onPress={salvar}
+            disabled={!nome.trim() || salvando}
+            style={[
+              styles.botao,
+              { backgroundColor: theme.accent, opacity: !nome.trim() || salvando ? 0.5 : 1 },
+            ]}
+          >
+            <ThemedText type="smallBold" style={{ color: theme.onAccent }}>
+              Salvar cliente
+            </ThemedText>
+          </Pressable>
+        </View>
       </SafeAreaView>
     </ThemedView>
   );
@@ -73,18 +87,29 @@ export default function NovoCliente() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  safeArea: { flex: 1, padding: Spacing.three, gap: Spacing.three },
+  safeArea: { flex: 1 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.three,
+    paddingBottom: Spacing.two,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  headerBotao: { width: 36, height: 36, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
+  form: { padding: Spacing.three, gap: Spacing.three },
   campo: { gap: Spacing.one },
   input: {
-    borderRadius: Spacing.two,
+    borderRadius: Radius.md,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two + 2,
     fontSize: 16,
   },
   botao: {
     marginTop: Spacing.two,
-    paddingVertical: Spacing.three,
-    borderRadius: Spacing.two,
+    minHeight: 52,
+    borderRadius: Radius.lg,
     alignItems: 'center',
+    justifyContent: 'center',
   },
 });

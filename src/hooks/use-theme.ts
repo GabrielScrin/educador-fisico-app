@@ -1,14 +1,10 @@
 /**
- * Learn more about light and dark modes:
- * https://docs.expo.dev/guides/color-schemes/
+ * O design "Clinical High-Contrast Dark" não tem variante clara — ver constants/theme.ts.
+ * O app roda sempre no tema escuro, independente da preferência do sistema.
  */
 
 import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export function useTheme() {
-  const scheme = useColorScheme();
-  const theme = scheme === 'unspecified' ? 'light' : scheme;
-
-  return Colors[theme];
+  return Colors.dark;
 }

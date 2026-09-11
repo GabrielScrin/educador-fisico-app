@@ -1,69 +1,76 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * Design system "Clinical High-Contrast Dark" — extraído do projeto Stitch "Design de App
+ * Premium" (telas Sessão Ativa V3 Plus, Clientes & Início Rápido, Prontuário & Evolução,
+ * Seletor em Tela Cheia, Resumo & Fechamento, Escalas de Referência).
+ *
+ * OLED pitch-dark de propósito: o app é usado em pé, sob luz de academia, então contraste alto
+ * e fundo bem escuro reduzem reflexo/glare e poupam bateria em turnos longos. Não existe
+ * variante clara neste design — o app roda sempre no tema escuro (ver `useTheme`).
  */
 
 import '@/global.css';
 
-import { Platform } from 'react-native';
-
 export const Colors = {
-  light: {
-    text: '#211D1A',
-    background: '#F4EFE8',
-    backgroundElement: '#EAE2D6',
-    backgroundSelected: '#DDD2C0',
-    textSecondary: '#6B6156',
-    accent: '#7A2436',
-    border: '#DCD2C2',
-  },
   dark: {
-    text: '#F4EFE8',
-    background: '#161311',
-    backgroundElement: '#231F1B',
-    backgroundSelected: '#2E2822',
-    textSecondary: '#B8AC9C',
-    accent: '#C97686',
-    border: '#332C25',
+    // Superfícies
+    background: '#0B0F12',
+    backgroundElement: '#13181E',
+    backgroundSelected: '#1C232B',
+    surfaceContainer: '#171C22',
+    surfaceContainerHigh: '#1B2026',
+
+    // Bordas
+    border: '#28323D',
+    borderSubtle: '#1B232C',
+
+    // Texto
+    text: '#F9FAFB',
+    textSecondary: '#9CA3AF',
+    textMuted: '#6B7280',
+
+    // Acentos semânticos
+    accent: '#10B981', // effort-optimal — CTA primário / sucesso
+    onAccent: '#003824',
+    secondary: '#06B6D4', // effort-peak — força/telemetria secundária
+    onSecondary: '#00323B',
+    warning: '#F59E0B', // pain-warning
+    danger: '#EF4444', // pain-critical
   },
 } as const;
 
-export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
+// Sem variante clara neste design system — mantido só para compatibilidade de tipos.
+(Colors as { light?: typeof Colors.dark }).light = Colors.dark;
 
-export const Fonts = Platform.select({
-  ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
-    serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
-  },
-  default: {
-    sans: 'normal',
-    serif: 'serif',
-    rounded: 'normal',
-    mono: 'monospace',
-  },
-  web: {
-    sans: 'var(--font-display)',
-    serif: 'var(--font-serif)',
-    rounded: 'var(--font-rounded)',
-    mono: 'var(--font-mono)',
-  },
-});
+export type ThemeColor = keyof typeof Colors.dark;
+
+export const Fonts = {
+  regular: 'Inter_400Regular',
+  medium: 'Inter_500Medium',
+  semiBold: 'Inter_600SemiBold',
+  bold: 'Inter_700Bold',
+  extraBold: 'Inter_800ExtraBold',
+  mono: 'monospace',
+  icon: 'MaterialSymbols_400Regular',
+} as const;
 
 export const Spacing = {
   half: 2,
   one: 4,
   two: 8,
+  twelve: 12,
   three: 16,
   four: 24,
   five: 32,
   six: 64,
 } as const;
 
-export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
+export const Radius = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  pill: 999,
+} as const;
+
 export const MaxContentWidth = 800;
