@@ -93,7 +93,7 @@ export default function ListaClientes() {
             />
           </View>
           <Link href="/cliente/novo" asChild>
-            <Pressable style={[styles.botaoNovo, { backgroundColor: theme.accent }]}>
+            <Pressable style={{ ...styles.botaoNovo, backgroundColor: theme.accent }}>
               <MaterialSymbol name="person_add" size={20} color={theme.onAccent} />
             </Pressable>
           </Link>

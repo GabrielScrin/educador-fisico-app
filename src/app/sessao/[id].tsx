@@ -127,10 +127,10 @@ export default function SessaoAoVivo() {
           <View style={{ flex: 1 }}>
             <View style={styles.headerTopo}>
               <View style={[styles.pontoPulso, { backgroundColor: theme.accent }]} />
-              <ThemedText type="label" themeColor="accent">
+              <ThemedText type="label" themeColor="accent" numberOfLines={1} style={styles.headerLabel}>
                 Sessão em andamento
               </ThemedText>
-              <ThemedText type="smallBold" style={styles.headerTimer}>
+              <ThemedText type="smallBold" style={styles.headerTimer} numberOfLines={1}>
                 {formatarDuracao(tempoTotal)}
               </ThemedText>
             </View>
@@ -563,7 +563,8 @@ const styles = StyleSheet.create({
   headerBotaoVoltar: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTopo: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
   pontoPulso: { width: 6, height: 6, borderRadius: 3 },
-  headerTimer: { marginLeft: 'auto', fontVariant: ['tabular-nums'] },
+  headerLabel: { flexShrink: 1 },
+  headerTimer: { marginLeft: 'auto', flexShrink: 0, fontVariant: ['tabular-nums'] },
   headerBotaoFinalizar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -576,8 +577,14 @@ const styles = StyleSheet.create({
   card: { borderRadius: Radius.lg, padding: Spacing.three, gap: Spacing.two },
   hudTopo: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, flexWrap: 'wrap' },
   hudCliente: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, flex: 1, minWidth: 140 },
-  hudTimers: { flexDirection: 'row', gap: Spacing.one },
-  timerPill: { borderRadius: Radius.sm, paddingHorizontal: Spacing.two, paddingVertical: 6, alignItems: 'center' },
+  hudTimers: { flexDirection: 'row', gap: Spacing.one, flexBasis: '100%' },
+  timerPill: {
+    flex: 1,
+    borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 6,
+    alignItems: 'center',
+  },
   timerPillIntervalo: {
     flexDirection: 'row',
     alignItems: 'center',

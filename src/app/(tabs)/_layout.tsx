@@ -1,5 +1,6 @@
 import { StyleSheet } from 'react-native';
 import { Tabs } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MaterialSymbol } from '@/components/material-symbol';
 import { Colors, Fonts } from '@/constants/theme';
@@ -12,13 +13,15 @@ const ICONE: Record<string, string> = {
 };
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tabs
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarActiveTintColor: Colors.dark.accent,
         tabBarInactiveTintColor: Colors.dark.textMuted,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [styles.tabBar, { height: 56 + insets.bottom, paddingBottom: insets.bottom }],
         tabBarLabelStyle: styles.tabLabel,
         tabBarIcon: ({ color, size }) => (
           <MaterialSymbol name={ICONE[route.name] ?? 'circle'} color={color as string} size={size} />
@@ -38,7 +41,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.dark.backgroundElement,
     borderTopColor: Colors.dark.border,
     borderTopWidth: StyleSheet.hairlineWidth,
-    height: 64,
     paddingTop: 8,
   },
   tabLabel: {
