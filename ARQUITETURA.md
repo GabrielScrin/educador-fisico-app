@@ -140,6 +140,44 @@ _Atualizado na sessão de 2026-09-10 (reskin completo pro design "Clinical High-
 - **Nota**: o pacote instalado só tem cortes estáticos por peso (100–700), sem o eixo `FILL`
   variável — não dá pra alternar contorno/preenchido em runtime como no CSS do protótipo web.
 
+### `<Link asChild>` com array de estilos volta a quebrar se o arquivo for movido
+
+- **Sintoma**: `Render Error` — `[expo-router]: You are passing an array of styles to a child of
+  <Slot>` — tela crasha ao abrir.
+- **Causa raiz**: o fix de `c115880` (2026-09-10) trocou `style={[...]}` por um objeto único no
+  `Pressable` dentro de `<Link asChild>` em `src/app/index.tsx`. Quando a tela foi movida pra
+  `src/app/(tabs)/index.tsx` na reestruturação em abas (`393137e`), o código foi reescrito do zero
+  nesse arquivo novo e reintroduziu o array de estilos — o fix não "viaja" com a lógica, é
+  específico do arquivo/linha.
+- **Fix**: `Pressable` filho direto de `<Link asChild>` sempre recebe um objeto único de estilo
+  (`{ ...styles.x, ...outrasProps }`), nunca um array (`[styles.x, {...}]`). `ThemedView` já
+  flatten a própria prop `style` internamente, mas isso não ajuda aqui — o `Slot` inspeciona as
+  props do elemento filho *antes* dele renderizar, não o resultado final.
+- **Como aplicar**: ao criar/mover qualquer tela com `<Link asChild>`, grep por `asChild` no
+  arquivo e confirmar que nenhum filho direto recebe array de estilo. Encontrado e corrigido de
+  novo em `src/app/(tabs)/index.tsx` na sessão de 2026-09-13, testando no device físico.
+
+### Views em `flexDirection: 'row'` não encolhem sozinhas — overflow sai da tela, não quebra linha
+
+- **Sintoma**: texto de cabeçalho sobrepondo um botão vizinho, ou dois "pills" lado a lado
+  estourando a borda direita da tela (cortados, não visíveis por completo) — só aparece rodando
+  no device de verdade, `tsc`/lint não pegam.
+- **Causa raiz**: React Native, diferente da web, não dá `flexShrink: 1` por padrão a `View`/
+  `Text` dentro de um container `flexDirection: 'row'`. Um texto ou pill com conteúdo mais largo
+  que o espaço disponível simplesmente extrapola o container em vez de encolher ou quebrar linha,
+  mesmo com o pai em `flex: 1`.
+- **Fix aplicado em `src/app/sessao/[id].tsx`**: no cabeçalho, `numberOfLines={1}` +
+  `flexShrink: 1` no rótulo "Sessão em andamento" e `flexShrink: 0` no timer (que nunca deve
+  truncar). Nos pills "Tempo total"/"Intervalo" (`hudTimers`), `flexBasis: '100%'` no container
+  (força quebra de linha própria dentro do `flexWrap: 'wrap'` do pai) + `flex: 1` em cada
+  `timerPill` (divide a largura da linha igualmente em vez de cada um pedir sua largura de
+  conteúdo).
+- **Como aplicar**: qualquer texto/pill dentro de uma row que pode variar de tamanho (nomes de
+  cliente, timers, contadores) precisa de `flexShrink` explícito ou `numberOfLines` — não confiar
+  que "coube no Figma/Stitch" significa que cabe com dado real (esse bug só apareceu porque havia
+  uma sessão de teste com timer de 78+ horas, mas o cálculo mostra que ele ocorre com qualquer
+  duração de formato `HH:MM:SS`, não é exclusivo desse dado extremo).
+
 ### O app é dark-only de propósito, não uma lacuna
 
 `src/hooks/use-theme.ts` sempre retorna `Colors.dark`, ignorando `useColorScheme()`. Isso não é
@@ -156,6 +194,42 @@ deep link = `educadorfisicoapp://`. Ainda não há dev client e build de produç
 a lado no mesmo device — quando isso passar a existir, confirmar o nome exato do pacote do dev
 client (normalmente `com.educadorfisico.app.dev`, dependendo do `eas.json`) antes de aplicar a
 regra de `-p` explícito abaixo.
+
+### Tab bar customizada sem `useSafeAreaInsets` some atrás da navegação do sistema
+
+- **Sintoma**: os ícones/labels das 4 abas aparecem espremidos na mesma linha dos botões de
+  navegação do Android (voltar/home/recentes) — só visível rodando no device físico (com barra de
+  navegação de 3 botões; gesture nav pode mascarar o mesmo bug de forma diferente).
+- **Causa raiz**: `tabBarStyle` em `src/app/(tabs)/_layout.tsx` tinha `height: 64` fixo. O
+  `@react-navigation/bottom-tabs` normalmente soma a safe-area inferior sozinho, mas um `height`
+  fixo no `tabBarStyle` do usuário sobrescreve esse comportamento automático.
+- **Fix**: `useSafeAreaInsets()` (já é dependência do projeto) e `height: 56 + insets.bottom,
+  paddingBottom: insets.bottom` no `tabBarStyle`, calculado dentro do componente `TabsLayout`.
+- **Como aplicar**: qualquer ajuste futuro de altura/padding da tab bar tem que continuar somando
+  `insets.bottom` — nunca voltar a um `height` fixo sem isso.
+
+### Setup do zero: `adb` não vem instalado por padrão nesta máquina
+
+Se `adb` não estiver no PATH (nenhuma pasta `Android/Sdk`, `where adb` falha), instalar só o
+Platform Tools (não precisa do Android Studio inteiro) via `winget install --id
+Google.PlatformTools -e`. Ele fica em
+`%LOCALAPPDATA%\Microsoft\WinGet\Packages\Google.PlatformTools_Microsoft.Winget.Source_8wekyb3d8bbwe\platform-tools\adb.exe`.
+Depois de plugar o device, `adb devices` mostra `unauthorized` até aceitar o popup de depuração
+USB **no próprio aparelho** — reiniciar o `adb` (`kill-server`/`start-server`) não resolve sozinho,
+precisa da confirmação manual na tela do celular.
+
+**Gotcha do Git Bash (MSYS)**: qualquer path Unix-style passado pro `adb` (`adb shell uiautomator
+dump /sdcard/x.xml`, `adb pull /sdcard/x.xml`) é reescrito pelo MSYS para um path Windows antes de
+chegar no `adb`, corrompendo o comando silenciosamente (ex.: `/sdcard/x.xml` vira
+`C:/Program Files/Git/sdcard/x.xml`, then dump/pull falham ou, pior, silenciosamente leem um
+arquivo antigo que já existia no device de um teste anterior). Sempre exportar
+`MSYS_NO_PATHCONV=1` antes de qualquer comando `adb shell`/`adb pull`/`adb push` com path
+absoluto tipo Unix.
+
+**Gotcha do sandbox de execução de comandos**: o daemon do `adb` não sobrevive entre chamadas de
+shell separadas (cada chamada mata o processo anterior) — rodar `adb kill-server && adb
+start-server` no início de cada bloco de comandos antes de qualquer `adb devices`/`adb shell`,
+em vez de assumir que o daemon de uma chamada anterior ainda está de pé.
 
 **1. Device físico conectado (preferencial)**
 - Metro + dev client já instalado — sem gerar `.apk`/`.aab` novo, a não ser que uma dependência
