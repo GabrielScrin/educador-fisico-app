@@ -38,6 +38,9 @@ const NAV_THEME: Theme = {
 };
 
 async function migrar(db: SQLiteDatabase) {
+  // Desligado por padrão no SQLite — sem isso, o ON DELETE CASCADE do schema (sessoes/leituras
+  // ao excluir um cliente, leituras ao excluir uma sessão) não é aplicado de verdade.
+  await db.execAsync('PRAGMA foreign_keys = ON;');
   for (const statement of MIGRATIONS) {
     await db.execAsync(statement);
   }
@@ -67,6 +70,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="cliente/novo" options={{ presentation: 'modal' }} />
           <Stack.Screen name="cliente/[id]" />
+          <Stack.Screen name="cliente/[id]/editar" options={{ presentation: 'modal' }} />
           <Stack.Screen name="sessao/[id]" options={{ gestureEnabled: false }} />
           <Stack.Screen name="sessao/[id]/resumo" options={{ gestureEnabled: false }} />
           <Stack.Screen name="escalas" options={{ presentation: 'modal' }} />

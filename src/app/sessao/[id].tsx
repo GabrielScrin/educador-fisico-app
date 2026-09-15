@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -13,9 +13,11 @@ import { Radius, Spacing } from '@/constants/theme';
 import { ESCALAS, faixaDoValor, type TipoEscala } from '@/constants/scales';
 import { TrendChart } from '@/components/trend-chart';
 import {
+  atualizarLeitura,
   atualizarNotaSessao,
   buscarCliente,
   buscarSessao,
+  excluirLeitura,
   listarLeituras,
   registrarLeitura,
   type Cliente,
@@ -57,6 +59,7 @@ export default function SessaoAoVivo() {
   const [fcValor, setFcValor] = useState('');
   const [notaAberta, setNotaAberta] = useState(false);
   const [nota, setNota] = useState('');
+  const [leituraEditando, setLeituraEditando] = useState<Leitura | null>(null);
 
   const tempoTotal = useElapsedSeconds(sessao?.iniciada_em ?? null);
   const { segundos: intervalo, zerar: zerarIntervalo } = useCountUpTimer();
@@ -78,18 +81,52 @@ export default function SessaoAoVivo() {
   }
 
   async function registrar(tipo: TipoEscala, valor: number) {
-    await registrarLeitura(db, sessaoId, tipo, valor);
+    if (leituraEditando) {
+      await atualizarLeitura(db, leituraEditando.id, valor);
+    } else {
+      await registrarLeitura(db, sessaoId, tipo, valor);
+    }
     setEscalaAberta(null);
+    setLeituraEditando(null);
     atualizarLeituras();
   }
 
   async function registrarFc() {
     const valor = Number(fcValor);
     if (!valor || valor <= 0) return;
-    await registrarLeitura(db, sessaoId, 'fc', valor);
+    if (leituraEditando) {
+      await atualizarLeitura(db, leituraEditando.id, valor);
+    } else {
+      await registrarLeitura(db, sessaoId, 'fc', valor);
+    }
     setFcValor('');
     setFcAberta(false);
+    setLeituraEditando(null);
     atualizarLeituras();
+  }
+
+  function abrirEdicaoLeitura(leitura: Leitura) {
+    setLeituraEditando(leitura);
+    if (leitura.tipo === 'fc') {
+      setFcValor(String(Math.round(leitura.valor)));
+      setFcAberta(true);
+    } else {
+      setEscalaAberta(leitura.tipo as TipoEscala);
+    }
+  }
+
+  function confirmarExclusaoLeitura(leitura: Leitura) {
+    Alert.alert('Excluir registro', 'Remove esse registro da sessão. Essa ação não pode ser desfeita.', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Excluir',
+        style: 'destructive',
+        onPress: async () => {
+          await excluirLeitura(db, leitura.id);
+          atualizarLeituras();
+        },
+      },
+    ]);
   }
 
   async function salvarNota() {
@@ -255,8 +292,9 @@ export default function SessaoAoVivo() {
                 {leiturasRecentes.map((leitura) => {
                   const cor = corLeitura(leitura, theme);
                   return (
-                    <View
+                    <Pressable
                       key={leitura.id}
+                      onPress={() => abrirEdicaoLeitura(leitura)}
                       style={[styles.itemRegistro, { backgroundColor: theme.backgroundElement }]}
                     >
                       <View
@@ -278,7 +316,14 @@ export default function SessaoAoVivo() {
                           {horario(leitura.registrada_em)}
                         </ThemedText>
                       </View>
-                    </View>
+                      <Pressable
+                        onPress={() => confirmarExclusaoLeitura(leitura)}
+                        hitSlop={10}
+                        style={styles.botaoExcluirRegistro}
+                      >
+                        <MaterialSymbol name="delete_outline" size={16} color={theme.textMuted} />
+                      </Pressable>
+                    </Pressable>
                   );
                 })}
               </View>
@@ -357,17 +402,31 @@ export default function SessaoAoVivo() {
       <ScalePicker
         visivel={escalaAberta !== null}
         escala={escalaAberta ? ESCALAS[escalaAberta] : null}
-        onFechar={() => setEscalaAberta(null)}
+        onFechar={() => {
+          setEscalaAberta(null);
+          setLeituraEditando(null);
+        }}
         onSelecionar={(valor) => escalaAberta && registrar(escalaAberta, valor)}
       />
 
       {/* Modal FC */}
-      <Modal visible={fcAberta} animationType="fade" transparent onRequestClose={() => setFcAberta(false)}>
+      <Modal
+        visible={fcAberta}
+        animationType="fade"
+        transparent
+        onRequestClose={() => {
+          setFcAberta(false);
+          setLeituraEditando(null);
+        }}
+      >
         <View style={styles.modalFundo}>
           <ThemedView style={[styles.modalCaixa, { backgroundColor: theme.backgroundElement }]}>
-            <ThemedText type="subtitle">Frequência cardíaca</ThemedText>
+            <ThemedText type="subtitle">
+              {leituraEditando ? 'Editar frequência cardíaca' : 'Frequência cardíaca'}
+            </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              Digite o bpm atual (integração automática com sensor Bluetooth vem numa próxima versão).
+              Digite o bpm {leituraEditando ? 'corrigido' : 'atual'} (integração automática com sensor
+              Bluetooth vem numa próxima versão).
             </ThemedText>
             <TextInput
               value={fcValor}
@@ -379,7 +438,13 @@ export default function SessaoAoVivo() {
               style={[styles.fcInput, { backgroundColor: theme.backgroundSelected, color: theme.text }]}
             />
             <View style={styles.modalBotoes}>
-              <Pressable onPress={() => setFcAberta(false)} style={styles.modalBotaoCancelar}>
+              <Pressable
+                onPress={() => {
+                  setFcAberta(false);
+                  setLeituraEditando(null);
+                }}
+                style={styles.modalBotaoCancelar}
+              >
                 <ThemedText type="smallBold" themeColor="textSecondary">
                   Cancelar
                 </ThemedText>
@@ -605,6 +670,7 @@ const styles = StyleSheet.create({
     padding: Spacing.two,
   },
   iconeRegistro: { width: 36, height: 36, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
+  botaoExcluirRegistro: { paddingLeft: Spacing.two, alignSelf: 'stretch', justifyContent: 'center' },
   grade2x2: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   tile: {
     flexBasis: '47%',

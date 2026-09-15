@@ -78,10 +78,10 @@ telas por cima do grupo de abas, escondendo a tab bar automaticamente.
 | FC via Bluetooth | ❌ | Anunciado na UI como "próxima versão", não implementado |
 | Login / identificação do educador | ❌ | Não definido — bloqueia sync multi-dispositivo |
 | Sync com Supabase | ❌ | Client existe, projeto linkado, zero tabelas/uso real |
-| Editar/excluir cliente, sessão ou leitura | ❌ | Só criar e listar hoje |
+| Editar/excluir cliente, sessão ou leitura | ✅ | Cliente: editar nome/contato + excluir (`cliente/[id]/editar`). Sessão: editar nota + excluir (menu "⋮" no card da caderneta). Leitura: excluir (prontuário e sessão ao vivo) + editar valor (só na sessão ao vivo, reabrindo o seletor/modal já usado pro registro) |
 | Transcrição de voz na nota | ❌ | Existia no protótipo visual (Stitch), não implementada — sem serviço de speech-to-text integrado |
 
-_Atualizado na sessão de 2026-09-10 (reskin completo pro design "Clinical High-Contrast Dark" + navegação em abas)._
+_Atualizado na sessão de 2026-09-15 (CRUD completo de cliente/sessão/leitura)._
 
 ## Armadilhas conhecidas
 
@@ -101,6 +101,18 @@ _Atualizado na sessão de 2026-09-10 (reskin completo pro design "Clinical High-
   é commitado e é substituído pela geração real na próxima vez que o bundler rodar.
 - **Como aplicar**: depois de criar uma rota nova, rode `npx expo export --platform ios
   --output-dir /tmp/x` (ou `expo start`) antes de confiar no resultado de `tsc --noEmit`.
+- **Pegadinha extra (sessão de 2026-09-15)**: `npx expo export` sozinho **nem sempre** regenera o
+  arquivo quando a rota nova fica dentro de uma pasta de segmento dinâmico que já tinha outras
+  rotas antes (ex.: criar `cliente/[id]/editar.tsx` quando `cliente/[id]/` já não existia com
+  nenhum arquivo, ou quando já existe cache de crawl do Metro em
+  `%TEMP%/metro-file-map-expo-*`) — o `expo export` roda um crawl "de uma vez" que pode não
+  reconhecer arquivo novo nesse caso específico, mesmo limpando com `--clear` (que só limpa cache
+  de transform, não o file-map/crawl). O bundle em si compila normal (o roteamento real não
+  depende desse arquivo), só o `.d.ts` de tipos fica sem a rota. **Fix que funcionou**: subir
+  `npx expo start` de verdade (servidor vivo, não `export`) e fazer uma requisição HTTP que force
+  o Metro a montar o bundle (ex. `curl http://localhost:8081/src/app/_layout.tsx.bundle?platform=ios&dev=true`)
+  — isso dispara o watcher/crawl completo e regenera o arquivo corretamente. Depois, derrubar o
+  processo (`pkill -f "expo start"` ou equivalente) e rodar `tsc --noEmit` de novo.
 
 ### `expo-sqlite` não builda pra `web`
 
@@ -177,6 +189,22 @@ _Atualizado na sessão de 2026-09-10 (reskin completo pro design "Clinical High-
   que "coube no Figma/Stitch" significa que cabe com dado real (esse bug só apareceu porque havia
   uma sessão de teste com timer de 78+ horas, mas o cálculo mostra que ele ocorre com qualquer
   duração de formato `HH:MM:SS`, não é exclusivo desse dado extremo).
+
+### `ON DELETE CASCADE` do schema não funciona sem `PRAGMA foreign_keys = ON`
+
+- **Sintoma**: excluir um cliente (ou uma sessão) deixaria sessões/leituras órfãs no banco em vez
+  de cascatear, mesmo o `schema.ts` já declarando `REFERENCES clientes(id) ON DELETE CASCADE` /
+  `REFERENCES sessoes(id) ON DELETE CASCADE` desde o início do projeto.
+- **Causa raiz**: no SQLite, aplicação de foreign key é **desligada por padrão** por conexão —
+  declarar `ON DELETE CASCADE` no `CREATE TABLE` não basta, é preciso rodar `PRAGMA foreign_keys
+  = ON` toda vez que a conexão abre. Isso nunca tinha sido feito neste projeto (só foi notado ao
+  implementar exclusão de cliente/sessão na sessão de 2026-09-15 — antes disso só existiam
+  `INSERT`/`UPDATE`, nunca um `DELETE`, então o gap ficou invisível).
+- **Fix**: `db.execAsync('PRAGMA foreign_keys = ON;')` como primeira linha do `migrar()` em
+  `src/app/_layout.tsx`, antes de rodar as migrations — é por conexão, então precisa rodar de
+  novo toda vez que o app abre (não é algo que "gruda" no arquivo `.db`).
+- **Como aplicar**: qualquer `DELETE` novo que dependa de cascata (nenhum previsto além de
+  cliente/sessão hoje) já está coberto por essa pragma global — não precisa repetir por query.
 
 ### O app é dark-only de propósito, não uma lacuna
 

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -11,9 +11,12 @@ import { ThemedView } from '@/components/themed-view';
 import { TrendChart } from '@/components/trend-chart';
 import { Radius, Spacing } from '@/constants/theme';
 import {
+  atualizarNotaSessao,
   buscarCliente,
   buscarResumoGeralCliente,
   criarSessao,
+  excluirLeitura,
+  excluirSessao,
   listarLeituras,
   listarSessoesPorCliente,
   type Cliente,
@@ -48,13 +51,19 @@ export default function PerfilCliente() {
   const [criando, setCriando] = useState(false);
   const [sessaoAberta, setSessaoAberta] = useState<number | null>(null);
   const [leiturasPorSessao, setLeiturasPorSessao] = useState<Record<number, Leitura[]>>({});
+  const [sessaoEditandoNota, setSessaoEditandoNota] = useState<ResumoSessao | null>(null);
+  const [notaEdicao, setNotaEdicao] = useState('');
+
+  const recarregarSessoes = useCallback(() => {
+    listarSessoesPorCliente(db, clienteId).then(setSessoes);
+    buscarResumoGeralCliente(db, clienteId).then(setResumoGeral);
+  }, [db, clienteId]);
 
   useFocusEffect(
     useCallback(() => {
       buscarCliente(db, clienteId).then(setCliente);
-      listarSessoesPorCliente(db, clienteId).then(setSessoes);
-      buscarResumoGeralCliente(db, clienteId).then(setResumoGeral);
-    }, [db, clienteId]),
+      recarregarSessoes();
+    }, [db, clienteId, recarregarSessoes]),
   );
 
   const tendenciaOmni = useMemo(() => {
@@ -86,6 +95,61 @@ export default function PerfilCliente() {
     }
   }
 
+  function abrirEdicaoNota(sessao: ResumoSessao) {
+    setSessaoEditandoNota(sessao);
+    setNotaEdicao(sessao.nota ?? '');
+  }
+
+  async function salvarNotaEditada() {
+    if (!sessaoEditandoNota) return;
+    await atualizarNotaSessao(db, sessaoEditandoNota.id, notaEdicao);
+    setSessaoEditandoNota(null);
+    recarregarSessoes();
+  }
+
+  function confirmarExclusaoSessao(sessao: ResumoSessao) {
+    Alert.alert(
+      'Excluir sessão',
+      `Isso apaga a sessão de ${formatarData(sessao.iniciada_em)} e todas as leituras registradas nela. Essa ação não pode ser desfeita.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Excluir',
+          style: 'destructive',
+          onPress: async () => {
+            await excluirSessao(db, sessao.id);
+            if (sessaoAberta === sessao.id) setSessaoAberta(null);
+            recarregarSessoes();
+          },
+        },
+      ],
+    );
+  }
+
+  function abrirOpcoesSessao(sessao: ResumoSessao) {
+    Alert.alert(formatarData(sessao.iniciada_em), undefined, [
+      { text: 'Editar nota', onPress: () => abrirEdicaoNota(sessao) },
+      { text: 'Excluir sessão', style: 'destructive', onPress: () => confirmarExclusaoSessao(sessao) },
+      { text: 'Cancelar', style: 'cancel' },
+    ]);
+  }
+
+  function confirmarExclusaoLeitura(sessaoId: number, leitura: Leitura) {
+    Alert.alert('Excluir leitura', 'Remove esse registro da sessão. Essa ação não pode ser desfeita.', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Excluir',
+        style: 'destructive',
+        onPress: async () => {
+          await excluirLeitura(db, leitura.id);
+          const leituras = await listarLeituras(db, sessaoId);
+          setLeiturasPorSessao((atual) => ({ ...atual, [sessaoId]: leituras }));
+          recarregarSessoes();
+        },
+      },
+    ]);
+  }
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
@@ -96,6 +160,13 @@ export default function PerfilCliente() {
           <ThemedText type="subtitle" numberOfLines={1} style={{ flex: 1 }}>
             {cliente?.nome ?? 'Cliente'}
           </ThemedText>
+          <Pressable
+            onPress={() => router.push({ pathname: '/cliente/[id]/editar', params: { id: String(clienteId) } })}
+            hitSlop={12}
+            style={[styles.headerAcao, { backgroundColor: theme.backgroundElement }]}
+          >
+            <MaterialSymbol name="edit" size={18} color={theme.textSecondary} />
+          </Pressable>
           <Pressable
             onPress={() => router.push('/escalas')}
             hitSlop={12}
@@ -201,12 +272,52 @@ export default function PerfilCliente() {
                   aberta={sessaoAberta === sessao.id}
                   leituras={leiturasPorSessao[sessao.id] ?? []}
                   onPress={() => alternarSessao(sessao.id)}
+                  onOpcoes={() => abrirOpcoesSessao(sessao)}
+                  onExcluirLeitura={(leitura) => confirmarExclusaoLeitura(sessao.id, leitura)}
                 />
               ))
             )}
           </View>
         </ScrollView>
       </SafeAreaView>
+
+      {/* Modal editar nota da sessão */}
+      <Modal
+        visible={sessaoEditandoNota !== null}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setSessaoEditandoNota(null)}
+      >
+        <View style={styles.modalFundo}>
+          <ThemedView style={[styles.modalCaixa, { backgroundColor: theme.backgroundElement }]}>
+            <ThemedText type="subtitle">Nota da sessão</ThemedText>
+            <TextInput
+              value={notaEdicao}
+              onChangeText={setNotaEdicao}
+              placeholder="Escreva aqui a observação clínica..."
+              placeholderTextColor={theme.textMuted}
+              multiline
+              autoFocus
+              style={[styles.notaInput, { backgroundColor: theme.backgroundSelected, color: theme.text }]}
+            />
+            <View style={styles.modalBotoes}>
+              <Pressable onPress={() => setSessaoEditandoNota(null)} style={styles.modalBotaoCancelar}>
+                <ThemedText type="smallBold" themeColor="textSecondary">
+                  Cancelar
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                onPress={salvarNotaEditada}
+                style={[styles.modalBotaoSalvar, { backgroundColor: theme.accent }]}
+              >
+                <ThemedText type="smallBold" style={{ color: theme.onAccent }}>
+                  Salvar nota
+                </ThemedText>
+              </Pressable>
+            </View>
+          </ThemedView>
+        </View>
+      </Modal>
     </ThemedView>
   );
 }
@@ -252,11 +363,15 @@ function SessaoItem({
   aberta,
   leituras,
   onPress,
+  onOpcoes,
+  onExcluirLeitura,
 }: {
   sessao: ResumoSessao;
   aberta: boolean;
   leituras: Leitura[];
   onPress: () => void;
+  onOpcoes: () => void;
+  onExcluirLeitura: (leitura: Leitura) => void;
 }) {
   const theme = useTheme();
   return (
@@ -270,6 +385,9 @@ function SessaoItem({
             </ThemedText>
           ) : null}
         </View>
+        <Pressable onPress={onOpcoes} hitSlop={10} style={styles.sessaoBotaoOpcoes}>
+          <MaterialSymbol name="more_vert" size={20} color={theme.textMuted} />
+        </Pressable>
         <MaterialSymbol
           name="expand_more"
           size={20}
@@ -308,9 +426,14 @@ function SessaoItem({
                   {' · '}
                   {l.tipo.toUpperCase()}
                 </ThemedText>
-                <ThemedText type="small" themeColor="text">
-                  {l.tipo === 'fc' ? `${Math.round(l.valor)} bpm` : l.valor}
-                </ThemedText>
+                <View style={styles.leituraLinhaDir}>
+                  <ThemedText type="small" themeColor="text">
+                    {l.tipo === 'fc' ? `${Math.round(l.valor)} bpm` : l.valor}
+                  </ThemedText>
+                  <Pressable onPress={() => onExcluirLeitura(l)} hitSlop={10}>
+                    <MaterialSymbol name="delete_outline" size={16} color={theme.textMuted} />
+                  </Pressable>
+                </View>
               </View>
             ))
           )}
@@ -363,10 +486,24 @@ const styles = StyleSheet.create({
   secao: { gap: Spacing.two },
   vazio: { paddingVertical: Spacing.four, alignItems: 'center' },
   sessaoCard: { borderRadius: Radius.lg, padding: Spacing.three, gap: Spacing.two },
-  sessaoTopo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  sessaoTopoEsq: { gap: 2 },
+  sessaoTopo: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
+  sessaoTopoEsq: { flex: 1, gap: 2 },
+  sessaoBotaoOpcoes: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
   sessaoMetricas: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three, borderRadius: Radius.md, padding: Spacing.two },
   metrica: { gap: 2 },
   sessaoDetalhe: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: Spacing.two, gap: Spacing.one },
-  leituraLinha: { flexDirection: 'row', justifyContent: 'space-between' },
+  leituraLinha: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  leituraLinhaDir: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  modalFundo: { flex: 1, backgroundColor: 'rgba(11,15,18,0.75)', justifyContent: 'center', padding: Spacing.four },
+  modalCaixa: { borderRadius: Radius.lg, padding: Spacing.four, gap: Spacing.three },
+  notaInput: {
+    borderRadius: Radius.md,
+    padding: Spacing.three,
+    fontSize: 16,
+    minHeight: 96,
+    textAlignVertical: 'top',
+  },
+  modalBotoes: { flexDirection: 'row', justifyContent: 'flex-end', gap: Spacing.three },
+  modalBotaoCancelar: { paddingVertical: Spacing.two, paddingHorizontal: Spacing.three },
+  modalBotaoSalvar: { paddingVertical: Spacing.two, paddingHorizontal: Spacing.four, borderRadius: Radius.md },
 });

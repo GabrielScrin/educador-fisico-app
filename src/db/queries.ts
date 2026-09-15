@@ -143,6 +143,25 @@ export async function criarCliente(
   return resultado.lastInsertRowId;
 }
 
+export async function atualizarCliente(
+  db: SQLiteDatabase,
+  id: number,
+  nome: string,
+  contato: string | null,
+): Promise<void> {
+  await db.runAsync(`UPDATE clientes SET nome = ?, contato = ? WHERE id = ?`, [
+    nome.trim(),
+    contato?.trim() || null,
+    id,
+  ]);
+}
+
+// Cascateia pra sessões e leituras do cliente via ON DELETE CASCADE (schema.ts) — requer
+// PRAGMA foreign_keys = ON, ligado uma vez no onInit do SQLiteProvider (src/app/_layout.tsx).
+export async function excluirCliente(db: SQLiteDatabase, id: number): Promise<void> {
+  await db.runAsync(`DELETE FROM clientes WHERE id = ?`, [id]);
+}
+
 export async function listarSessoesPorCliente(
   db: SQLiteDatabase,
   clienteId: number,
@@ -174,6 +193,11 @@ export async function criarSessao(db: SQLiteDatabase, clienteId: number): Promis
 
 export async function buscarSessao(db: SQLiteDatabase, id: number): Promise<Sessao | null> {
   return db.getFirstAsync<Sessao>(`SELECT * FROM sessoes WHERE id = ?`, [id]);
+}
+
+// Cascateia pra leituras da sessão via ON DELETE CASCADE (mesma ressalva de excluirCliente).
+export async function excluirSessao(db: SQLiteDatabase, id: number): Promise<void> {
+  await db.runAsync(`DELETE FROM sessoes WHERE id = ?`, [id]);
 }
 
 // Sessões abertas (ainda não finalizadas) de qualquer cliente — alimenta a aba "Treino Ativo",
@@ -265,4 +289,16 @@ export async function listarLeituras(db: SQLiteDatabase, sessaoId: number): Prom
     `SELECT * FROM leituras WHERE sessao_id = ? ORDER BY registrada_em ASC`,
     [sessaoId],
   );
+}
+
+export async function atualizarLeitura(
+  db: SQLiteDatabase,
+  id: number,
+  valor: number,
+): Promise<void> {
+  await db.runAsync(`UPDATE leituras SET valor = ? WHERE id = ?`, [valor, id]);
+}
+
+export async function excluirLeitura(db: SQLiteDatabase, id: number): Promise<void> {
+  await db.runAsync(`DELETE FROM leituras WHERE id = ?`, [id]);
 }
