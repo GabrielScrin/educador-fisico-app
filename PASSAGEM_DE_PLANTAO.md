@@ -1,4 +1,4 @@
-# Passagem de plantão — 2026-09-15 (CRUD completo de cliente/sessão/leitura)
+# Passagem de plantão — 2026-09-20 (login + sincronização com Supabase, gap #1 e #2 do MVP)
 
 Nota rápida pra mim mesmo (Claude) na próxima sessão. `ARQUITETURA.md` é a fonte permanente de
 verdade (estrutura de código, estado por feature, armadilhas técnicas) e `PRODUTO.md` é a visão
@@ -7,75 +7,82 @@ que valem ser lembradas antes de mexer de novo. Sempre confira os outros dois pr
 
 ## O que foi feito hoje
 
-Sessão começou com `git pull` (o `main` local estava 2 commits atrás — trouxe a sessão de teste
-físico de 2026-09-13 com os 4 bugs de UI já corrigidos, que já estava documentada aqui). Depois
-disso, fechei o gap "Editar/excluir cliente, sessão ou leitura" que constava como `❌` desde a
-criação do `ARQUITETURA.md` — até então só existia criar e listar.
+O usuário pediu pra fechar, um a um, os gaps do MVP listados em `PRODUTO.md`. Comecei pelos dois
+primeiros (Sincronização e Login), que são amarrados por design — não faz sentido sincronizar sem
+saber de quem é o dado.
 
-1. **Cliente**: nova tela `cliente/[id]/editar.tsx` (modal), acessível pelo ícone de lápis no
-   cabeçalho do prontuário — edita nome/contato (`atualizarCliente`) e tem "Excluir cliente"
-   (`excluirCliente`, com confirmação destrutiva via `Alert`, cascateando sessões e leituras).
-2. **Sessão**: ícone "⋮" no card de cada sessão na caderneta do prontuário abre um menu com
-   "Editar nota" (reaproveita `atualizarNotaSessao`, que já existia mas só era chamada durante a
-   sessão ao vivo) e "Excluir sessão" (`excluirSessao`, cascateia leituras, confirmação
-   destrutiva).
-3. **Leitura**: ícone de lixeira em cada leitura excluir (`excluirLeitura`) — disponível tanto no
-   detalhe expandido da caderneta (prontuário) quanto nos "Registros da sessão" (sessão ao vivo).
-   Editar valor (`atualizarLeitura`) só foi implementado na sessão ao vivo (tocar na linha reabre
-   o mesmo seletor de escala/modal de FC usado pra registrar, pré-preenchido) — é onde a correção
-   de um toque errado realmente importa; editar um valor histórico do prontuário não foi
-   construído (só excluir lá).
-4. **Bug pré-existente descoberto e corrigido**: `PRAGMA foreign_keys = ON` nunca tinha sido
-   ligado neste projeto, então o `ON DELETE CASCADE` já declarado no `schema.ts` desde o início
-   nunca funcionou de verdade (SQLite desliga isso por padrão por conexão). Ficou invisível até
-   agora porque nunca existiu um `DELETE` no código. Corrigido em `src/app/_layout.tsx`. Ver
-   `ARQUITETURA.md` § armadilhas pro detalhe.
-5. **Armadilha nova do typegen de rotas**: `npx expo export` sozinho não regenerou
-   `.expo/types/router.d.ts` pra rota nova `cliente/[id]/editar` (mesmo limpando cache com
-   `--clear` e limpando `%TEMP%/metro-file-map-expo-*` manualmente) — só resolveu subindo
-   `npx expo start` de verdade e forçando uma requisição HTTP de bundle. Documentado em
-   `ARQUITETURA.md`, complementando a armadilha que já existia sobre esse arquivo.
+1. **Login por e-mail/senha** (escolha do usuário, entre 3 opções oferecidas: e-mail/senha,
+   magic link, Google) via Supabase Auth. `src/app/(auth)/login.tsx` + `cadastro.tsx`, gate de
+   rota com `<Stack.Protected guard={!!session}>` em `src/app/_layout.tsx` (API nativa do
+   expo-router nesta versão — confirmei lendo o source antes de usar, por causa do aviso do
+   `AGENTS.md` sobre o Expo ter mudado).
+2. **Sincronização com Supabase como backup** — SQLite local continua sendo a fonte primária.
+   Cada linha (clientes/sessoes/leituras) ganhou `uuid`/`atualizado_em`/`sincronizado_em`
+   (`src/db/schema.ts`, migração versionada por `PRAGMA user_version` em `src/db/migrate.ts`,
+   novo — a lista de migrations antiga rodava tudo sempre, sem versionamento, e um `ALTER TABLE`
+   novo ia quebrar quem já tinha o banco criado). Motor de sync em `src/lib/sync.ts` (push+pull
+   por uuid, ordem clientes→sessões→leituras), disparado automaticamente ao logar e ao voltar pro
+   foreground via `src/hooks/use-sync.tsx`, mais botão manual em Ajustes.
+3. **Aba Ajustes** reescrita: seção "Conta" (e-mail logado + Sair) e status real de sincronização
+   (nunca mostra "sincronizado" sem ter sincronizado de verdade — mesma régua que já valia pro
+   resto do app).
+4. Instalei `@react-native-async-storage/async-storage` (sessão do Supabase precisa de storage
+   explícito em RN, não existe `localStorage`) e `expo-crypto` (gerar os uuid).
+5. Validado com `tsc --noEmit`, `expo lint` e `expo export --platform ios` — todos limpos.
+6. O commit remoto integrado nesta atualização também fecha o CRUD: editar/excluir cliente,
+   editar nota/excluir sessão e editar/excluir leituras. A rota `cliente/[id]/editar` foi mantida
+   junto com o novo guard de autenticação, e `PRAGMA foreign_keys = ON` foi preservado em
+   `applyMigrations()` para as exclusões em cascata.
+
+## O que NÃO foi feito (bloqueios reais, não esquecimento)
+
+- **Migração remota não foi aplicada.** O SQL (tabelas `clientes`/`sessoes`/`leituras` + RLS por
+  `educador_id = auth.uid()`) está pronto em `remote_migration.sql`, na raiz do repo. Duas coisas
+  na ordem:
+  1. Tentei aplicar via Management API (`SUPABASE_ACCESS_TOKEN` do `.env`, comando avulso, sem
+     `supabase login` global — como o próprio `.env` já instruía). Primeira tentativa foi
+     bloqueada pelo classificador de modo automático do Claude Code ("Production Deploy" — DDL em
+     produção pede aprovação explícita, faz sentido). Segunda tentativa (usuário aprovou) passou
+     da permissão mas deu **timeout de conexão** — descobri que o projeto Supabase
+     `apyfxpegxjfgznmfvqzq` está com status `INACTIVE` (pausado, provavelmente por inatividade
+     desde a criação em 2026-09-08).
+  2. Perguntei se podia restaurar o projeto e já aplicar a migração. **O usuário pediu
+     explicitamente pra eu não mexer** ("não faça nada, depois eu rodo as migrations") — ele vai
+     restaurar e rodar `remote_migration.sql` por conta própria. **Não tentar de novo sem ele
+     pedir.**
+- **Nada disso foi testado em device físico.** O celular não estava conectado via USB nesta
+  sessão (só na sessão de 2026-09-13). Login, sincronização, e até o app em si depois dessas
+  mudanças no `_layout.tsx` (guard de rota novo) — nada disso rodou de verdade num aparelho
+  ainda. `tsc`/lint/export só garantem que compila, não que a UI funciona (ver armadilha já
+  documentada no `ARQUITETURA.md`).
 
 ## Decisões e o porquê
 
-- **Exclusão de cliente/sessão pede confirmação destrutiva (`Alert.alert` com `style:
-  'destructive'`), exclusão de leitura não** — apagar um cliente ou sessão é uma perda de dado
-  clínico grande (cascateia tudo); apagar uma leitura isolada é o equivalente a "corrigir um
-  toque errado", uso esperado ser frequente o bastante pra não valer uma segunda confirmação toda
-  vez (ainda assim tem confirmação simples de um passo, só não é o texto longo de aviso).
-- **Editar valor de leitura só na sessão ao vivo, não no prontuário histórico**: a tela de sessão
-  ao vivo já tem o `ScalePicker`/modal de FC prontos e é o lugar onde corrigir um valor errado
-  faz sentido em tempo real. Reabrir esse mesmo fluxo a partir do prontuário (sessões já
-  finalizadas, possivelmente antigas) pareceu escopo maior sem necessidade clara — se o usuário
-  pedir, dá pra reaproveitar o mesmo padrão (abrir `ScalePicker`/modal de FC pré-preenchido a
-  partir da caderneta).
-- **Não commitei nada ainda** — as mudanças estão no working tree, esperando o usuário revisar ou
-  pedir o commit.
+- **Sincronização é backup, não a fonte de dados** — decisão explícita pra não reescrever o app
+  inteiro em cima de um modelo online-first. SQLite local continua sendo lido/escrito direto por
+  toda tela; o sync só empurra/puxa por cima, de forma assíncrona.
+- **Sem merge de conflito (last-write-wins implícito)** — documentado como limitação conhecida em
+  `ARQUITETURA.md`, não escondido. Aceitável porque hoje é uso single-device; fica pra quando o
+  gap "multi-dispositivo" (item 6 da lista) for endereçado de verdade.
+- **uuid gerado no aparelho vira o `id` remoto** (não um serial novo do Postgres) — decisão
+  técnica pra permitir push idempotente por upsert sem round-trip pra descobrir o id remoto
+  depois de criar localmente.
 
-## Validação feita (sem device físico)
+## O que falta (ordem que o usuário pediu, dos gaps do MVP)
 
-`npx tsc --noEmit` (limpo), `npx expo lint` (limpo), `npx expo export --platform ios` (bundle
-completo compila). **Não testei em device físico nem emulador nesta sessão** — não havia device
-conectado nem `adb` disponível no ambiente. Os fluxos novos (editar/excluir cliente, editar/
-excluir nota e sessão, editar/excluir leitura) nunca foram vistos rodando de verdade — mesma
-ressalva de sempre: isso pega erro de import/tipo/regra do React Compiler, não garante que a UI
-renderiza/interage certo (ex.: os dois `Pressable` aninhados novos — "⋮" e lixeira dentro do card
-da sessão/leitura, mesmo padrão já usado e confirmado funcionando em `ClienteCard` da aba
-Clientes — teoricamente não capturam o toque do card pai, mas nunca vi isso na tela com esses
-ícones específicos).
+1. ~~Sincronização~~ — código pronto, migração remota pendente (usuário vai aplicar).
+2. ~~Login~~ — código pronto, não testado em device.
+3. **FC via Bluetooth** — próximo item, ainda não iniciado.
+4. ~~Editar/excluir cliente, sessão ou leitura~~ — código integrado, ainda requer teste em device.
+5. Transcrição de voz na nota.
+6. Multi-dispositivo (depende de 1 estar rodando de verdade + resolver o gap de merge de
+   conflito acima).
 
-## O que falta
-
-- Testar de ponta a ponta em device físico: fluxo completo de editar/excluir cliente, editar
-  nota/excluir sessão, editar valor/excluir leitura (ambos os lugares: prontuário e sessão ao
-  vivo). Seguir a seção "Verificação visual real via screenshot por `adb`" do `ARQUITETURA.md`.
-- Confirmar que a exclusão em cascata (cliente → sessões → leituras) realmente funciona com o
-  `PRAGMA foreign_keys = ON` novo — só validado por leitura do schema/pragma, não testado contra
-  o SQLite de verdade nesta sessão.
-- Gaps antigos que continuam de pé (não mudaram nesta sessão): FC via Bluetooth, login/sync com
-  Supabase, transcrição de voz na nota.
+Antes de seguir pro item 3, vale confirmar com o usuário se ele já rodou a migração e testou
+login/sync em device — isso pode revelar bugs que preferem ser corrigidos antes de empilhar mais
+código em cima.
 
 ## Ver também
 
-`ARQUITETURA.md` (técnico — tem as armadilhas do `PRAGMA foreign_keys` e do typegen de rotas
-detalhadas), `PRODUTO.md` (produto/fluxo completo).
+`ARQUITETURA.md` (técnico, seção "Autenticação e sincronização"), `PRODUTO.md` (produto/fluxo
+completo, tabela de gaps).

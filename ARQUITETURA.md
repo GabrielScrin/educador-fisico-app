@@ -11,10 +11,11 @@ falta, decisões recentes), ver `PASSAGEM_DE_PLANTAO.md`.
 
 - Repositório único: `G:\dev\educador-fisico-app` (Windows). Sem monorepo, sem pacotes
   separados.
-- Backend real: nenhum ainda. Tudo roda local (SQLite no aparelho). Um projeto Supabase já
-  existe e está linkado (`apyfxpegxjfgznmfvqzq`, ver `SETUP.md`), mas **nenhuma tabela foi
-  criada e nenhuma tela usa `src/lib/supabase.ts`** — é infraestrutura pronta pra quando o
-  produto precisar de sync, não algo em uso.
+- Backend: projeto Supabase `apyfxpegxjfgznmfvqzq` (ver `SETUP.md`) — login (e-mail/senha) e
+  sincronização de clientes/sessões/leituras foram implementados em código na sessão de
+  2026-09-20 (ver seção "Autenticação e sincronização" abaixo). **A migração remota (tabelas +
+  RLS) ainda não foi aplicada no projeto** — o app não vai sincronizar de verdade até isso
+  rodar. SQLite local continua sendo a fonte primária de dados em qualquer cenário.
 - Conteúdo clínico das escalas (`src/constants/scales.ts`) vem de material de referência do
   educador físico Rafael de Souza Iyama (CREF 010255) — fonte externa ao código, citada no
   comentário do próprio arquivo. Se um valor for revisado, é o Rafael quem revisa, não uma
@@ -29,12 +30,16 @@ falta, decisões recentes), ver `PASSAGEM_DE_PLANTAO.md`.
 ```
 src/
   app/                       # rotas (expo-router, file-based)
+    (auth)/                  # grupo de login — só alcançável sem sessão (Stack.Protected)
+      _layout.tsx             # Stack simples (login + cadastro)
+      login.tsx                # e-mail/senha via Supabase Auth
+      cadastro.tsx              # signUp + aviso de confirmação de e-mail se necessário
     (tabs)/                  # grupo de abas — barra de navegação inferior
       _layout.tsx            # define as 4 abas + ícones + estilo da tab bar
       index.tsx               # aba "Clientes" (lista, busca, filtros)
       treino-ativo.tsx        # aba "Treino ativo" (sessões com finalizada_em NULL)
       evolucao.tsx             # aba "Evolução" (telemetria agregada do consultório)
-      ajustes.tsx              # aba "Ajustes" (estado real do app, atribuição clínica)
+      ajustes.tsx              # aba "Ajustes" (conta/logout, status real de sync, atribuição clínica)
     cliente/
       novo.tsx                # modal de cadastro — fora do grupo de abas de propósito
       [id].tsx                 # prontuário do cliente — tela cheia, sem tab bar
@@ -42,7 +47,7 @@ src/
       [id].tsx                 # sessão ao vivo — tela cheia, gestureEnabled:false
       [id]/resumo.tsx           # fechamento/consolidação da sessão
     escalas.tsx                # consulta de referência das 3 escalas (sem registro)
-    _layout.tsx                # Stack raiz: carrega fontes, tema de navegação, migrations
+    _layout.tsx                # Stack raiz: fontes, migrations, AuthProvider/SyncProvider, guard de sessão
   components/                # componentes de UI compartilhados (ver tabela abaixo)
   constants/
     theme.ts                  # tokens de cor/espaçamento/raio — fonte única do design system
@@ -50,10 +55,15 @@ src/
   hooks/
     use-theme.ts               # sempre retorna o tema escuro (app é dark-only, ver abaixo)
     use-elapsed-timer.ts        # timers "ao vivo" — único jeito seguro de usar Date.now() aqui
+    use-auth.tsx                # contexto da sessão Supabase (session, carregando)
+    use-sync.tsx                 # dispara/expõe estado da sincronização (ver seção abaixo)
   db/
-    schema.ts                   # migrations SQLite (clientes/sessoes/leituras)
+    schema.ts                   # migrations SQLite versionadas (clientes/sessoes/leituras + uuid/sync)
+    migrate.ts                   # roda MIGRATIONS por PRAGMA user_version + backfill de uuid
     queries.ts                   # toda a camada de acesso a dados — nenhuma tela faz SQL direto
-  lib/supabase.ts               # client criado, não usado em nenhuma tela ainda
+  lib/
+    supabase.ts                  # client Supabase, sessão persistida via AsyncStorage
+    sync.ts                       # push/pull de clientes/sessoes/leituras (ver seção abaixo)
 ```
 
 Por que `cliente/[id]`, `sessao/[id]` e `escalas` ficam **fora** do grupo `(tabs)`: são telas de
@@ -73,17 +83,71 @@ telas por cima do grupo de abas, escondendo a tab bar automaticamente.
 | Prontuário do cliente | ✅ | Histórico expansível + gráfico de evolução (OMNI) + resumo agregado |
 | Aba Treino ativo | ✅ | Sessões em andamento de qualquer cliente, pra retomar |
 | Aba Evolução | ✅ | Agregado do consultório (sessões na semana, ativos no mês, alertas de dor) |
-| Aba Ajustes | ✅ | Info real (armazenamento local, sem login), sem nada fake |
+| Aba Ajustes | ✅ | Conta (e-mail logado, sair), status real de sincronização, atribuição clínica |
 | Escalas de referência (consulta livre) | ✅ | `/escalas`, fora do fluxo de registro |
+| Login / identificação do educador | 🟡 | Código pronto (e-mail/senha via Supabase Auth), não testado em device ainda |
+| Sync com Supabase | 🟡 | Código pronto (push+pull por uuid, ver seção abaixo), **migração remota (tabelas/RLS) ainda não aplicada** — não sincroniza de verdade até isso rodar |
 | FC via Bluetooth | ❌ | Anunciado na UI como "próxima versão", não implementado |
-| Login / identificação do educador | ❌ | Não definido — bloqueia sync multi-dispositivo |
-| Sync com Supabase | ❌ | Client existe, projeto linkado, zero tabelas/uso real |
-| Editar/excluir cliente, sessão ou leitura | ✅ | Cliente: editar nome/contato + excluir (`cliente/[id]/editar`). Sessão: editar nota + excluir (menu "⋮" no card da caderneta). Leitura: excluir (prontuário e sessão ao vivo) + editar valor (só na sessão ao vivo, reabrindo o seletor/modal já usado pro registro) |
+| Editar/excluir cliente, sessão ou leitura | ✅ | Cliente: editar/excluir; sessão: editar nota/excluir; leitura: editar durante sessão e excluir |
 | Transcrição de voz na nota | ❌ | Existia no protótipo visual (Stitch), não implementada — sem serviço de speech-to-text integrado |
+| Multi-dispositivo (2º aparelho do mesmo educador) | ❌ | Depende do sync acima estar rodando de verdade; sync atual não faz merge de conflito (last-write-wins), só push+pull simples |
 
-_Atualizado na sessão de 2026-09-15 (CRUD completo de cliente/sessão/leitura)._
+_Atualizado na sessão de 2026-09-20 (login + sincronização com Supabase, código completo — ver seção "Autenticação e sincronização")._ Sessão anterior: 2026-09-10 (reskin "Clinical High-Contrast Dark" + navegação em abas).
+
+## Autenticação e sincronização (código pronto, migração remota pendente)
+
+Implementado na sessão de 2026-09-20, escolha do usuário: login por e-mail/senha (Supabase Auth),
+sincronização como *backup* — SQLite local continua sendo a fonte primária, a nuvem existe pra
+não perder dados se o aparelho quebrar/for trocado, e serve de base pro gap "multi-dispositivo"
+do `PRODUTO.md` mais adiante.
+
+**Autenticação**
+- `src/lib/supabase.ts` — client configurado com `persistSession: true` + `storage: AsyncStorage`
+  (RN não tem `localStorage`, é preciso apontar explicitamente ou a sessão não sobrevive a um
+  restart do app).
+- `src/hooks/use-auth.tsx` — `AuthProvider`/`useAuth()`, lê `supabase.auth.getSession()` uma vez
+  e escuta `onAuthStateChange` daí em diante.
+- `src/app/_layout.tsx` — guard de rota via `<Stack.Protected guard={!!session}>` /
+  `guard={!session}` (API nativa do expo-router nesta versão, confirmado em
+  `node_modules/expo-router/build/views/Protected.js` antes de usar — ver `AGENTS.md`, a versão
+  do Expo muda rápido). Splash screen só esconde quando fontes **e** sessão de auth estão prontos
+  (evita piscar a tela de login por uma fração de segundo pra quem já tá logado).
+- `src/app/(auth)/login.tsx` e `cadastro.tsx` — formulário simples, mensagens de erro do Supabase
+  traduzidas pros casos comuns (credenciais inválidas, e-mail não confirmado, já cadastrado).
+
+**Sincronização** (`src/lib/sync.ts`, orquestrado por `src/hooks/use-sync.tsx`)
+- Cada linha local (clientes/sessoes/leituras) ganhou 3 colunas novas: `uuid` (identidade
+  estável entre local e nuvem — o `id` remoto É esse uuid, não um serial novo), `atualizado_em`
+  (carimbo de toda escrita) e `sincronizado_em` (até onde já foi enviado). Pendente de envio =
+  `sincronizado_em IS NULL OR sincronizado_em < atualizado_em`.
+- **Push**: por tabela, na ordem clientes → sessões → leituras (FK depende disso), upsert por
+  uuid no Supabase, depois marca `sincronizado_em`.
+- **Pull**: busca tudo que a RLS deixa ver (`educador_id = auth.uid()`), insere localmente o que
+  ainda não existe por `uuid` (resolvendo `cliente_id`/`sessao_id` remotos, que são uuid, pro id
+  local INTEGER correspondente).
+- **Dispara automaticamente** ao logar e sempre que o app volta pro foreground
+  (`AppState.addEventListener('change', ...)`), mais o botão manual "Sincronizar agora" na aba
+  Ajustes — que também é o único lugar que mostra o estado real (nunca "sincronizado" sem ter
+  sincronizado: estado vem de uma chamada real, sucesso ou erro, nunca hardcoded).
+- **Limitação conhecida, documentada de propósito**: não há merge de conflito — se a mesma linha
+  for editada em dois aparelhos entre dois syncs, o último push vence sem aviso. Aceitável hoje
+  (uso single-device); vira relevante quando o gap "multi-dispositivo" for endereçado de verdade.
+
+**Schema remoto** (SQL em `remote_migration.sql`, gerado na sessão — ainda não aplicado): tabelas
+`clientes`/`sessoes`/`leituras` no schema `public`, PK `id uuid` (mesmo valor do `uuid` local),
+`educador_id uuid references auth.users(id) default auth.uid()`, RLS habilitado com policy
+`educador_id = auth.uid()` pra tudo (select/insert/update/delete). **Precisa ser aplicado**
+manualmente ou com aprovação explícita — ver `PASSAGEM_DE_PLANTAO.md` para o motivo (bloqueio do
+classificador de modo automático, "Production Deploy": DDL em produção não roda sem confirmação
+explícita, mesmo com o token de acesso disponível no `.env`).
 
 ## Armadilhas conhecidas
+
+### `ON DELETE CASCADE` exige `PRAGMA foreign_keys = ON`
+
+- O SQLite desliga a aplicação de foreign keys por padrão em cada conexão. `applyMigrations()`
+  ativa a pragma antes das migrations, garantindo as exclusões em cascata de clientes, sessões
+  e leituras.
 
 ### `.expo/types/router.d.ts` fica desatualizado ao criar rota nova
 
@@ -101,18 +165,6 @@ _Atualizado na sessão de 2026-09-15 (CRUD completo de cliente/sessão/leitura).
   é commitado e é substituído pela geração real na próxima vez que o bundler rodar.
 - **Como aplicar**: depois de criar uma rota nova, rode `npx expo export --platform ios
   --output-dir /tmp/x` (ou `expo start`) antes de confiar no resultado de `tsc --noEmit`.
-- **Pegadinha extra (sessão de 2026-09-15)**: `npx expo export` sozinho **nem sempre** regenera o
-  arquivo quando a rota nova fica dentro de uma pasta de segmento dinâmico que já tinha outras
-  rotas antes (ex.: criar `cliente/[id]/editar.tsx` quando `cliente/[id]/` já não existia com
-  nenhum arquivo, ou quando já existe cache de crawl do Metro em
-  `%TEMP%/metro-file-map-expo-*`) — o `expo export` roda um crawl "de uma vez" que pode não
-  reconhecer arquivo novo nesse caso específico, mesmo limpando com `--clear` (que só limpa cache
-  de transform, não o file-map/crawl). O bundle em si compila normal (o roteamento real não
-  depende desse arquivo), só o `.d.ts` de tipos fica sem a rota. **Fix que funcionou**: subir
-  `npx expo start` de verdade (servidor vivo, não `export`) e fazer uma requisição HTTP que force
-  o Metro a montar o bundle (ex. `curl http://localhost:8081/src/app/_layout.tsx.bundle?platform=ios&dev=true`)
-  — isso dispara o watcher/crawl completo e regenera o arquivo corretamente. Depois, derrubar o
-  processo (`pkill -f "expo start"` ou equivalente) e rodar `tsc --noEmit` de novo.
 
 ### `expo-sqlite` não builda pra `web`
 
@@ -190,21 +242,15 @@ _Atualizado na sessão de 2026-09-15 (CRUD completo de cliente/sessão/leitura).
   uma sessão de teste com timer de 78+ horas, mas o cálculo mostra que ele ocorre com qualquer
   duração de formato `HH:MM:SS`, não é exclusivo desse dado extremo).
 
-### `ON DELETE CASCADE` do schema não funciona sem `PRAGMA foreign_keys = ON`
+### `SQLiteProvider` (sem `useSuspense`) não renderiza os filhos até o banco abrir
 
-- **Sintoma**: excluir um cliente (ou uma sessão) deixaria sessões/leituras órfãs no banco em vez
-  de cascatear, mesmo o `schema.ts` já declarando `REFERENCES clientes(id) ON DELETE CASCADE` /
-  `REFERENCES sessoes(id) ON DELETE CASCADE` desde o início do projeto.
-- **Causa raiz**: no SQLite, aplicação de foreign key é **desligada por padrão** por conexão —
-  declarar `ON DELETE CASCADE` no `CREATE TABLE` não basta, é preciso rodar `PRAGMA foreign_keys
-  = ON` toda vez que a conexão abre. Isso nunca tinha sido feito neste projeto (só foi notado ao
-  implementar exclusão de cliente/sessão na sessão de 2026-09-15 — antes disso só existiam
-  `INSERT`/`UPDATE`, nunca um `DELETE`, então o gap ficou invisível).
-- **Fix**: `db.execAsync('PRAGMA foreign_keys = ON;')` como primeira linha do `migrar()` em
-  `src/app/_layout.tsx`, antes de rodar as migrations — é por conexão, então precisa rodar de
-  novo toda vez que o app abre (não é algo que "gruda" no arquivo `.db`).
-- **Como aplicar**: qualquer `DELETE` novo que dependa de cascata (nenhum previsto além de
-  cliente/sessão hoje) já está coberto por essa pragma global — não precisa repetir por query.
+- **Contexto útil, não bug**: `SQLiteProvider` sem `useSuspense` (é o default, e é o que o app
+  usa) mantém `loading=true` internamente e só monta `children` depois que `onInit` (as
+  migrations) termina — confirmado lendo `node_modules/expo-sqlite/build/hooks.js`
+  (`SQLiteProviderNonSuspense`) antes de assumir.
+- **Por que importa**: qualquer provider que precise de `useSQLiteContext()` (ex.: `SyncProvider`
+  em `src/hooks/use-sync.tsx`) pode ficar aninhado direto dentro de `<SQLiteProvider>` sem se
+  preocupar em esperar o banco — se ele renderizou, o banco já está pronto.
 
 ### O app é dark-only de propósito, não uma lacuna
 

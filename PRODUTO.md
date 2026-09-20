@@ -111,8 +111,8 @@ tempo dentro da sessão quanto médias/gráficos de evolução entre sessões.
 
 | Área | Hoje (MVP) | Versão completa prevista |
 |---|---|---|
-| Armazenamento | 100% local, SQLite (`expo-sqlite`) no aparelho do educador | Sincronização em nuvem via Supabase — o client já existe em `src/lib/supabase.ts`, criado mas **ainda não usado em nenhuma tela** |
-| Login | Nenhum — app abre direto na aba Clientes | A pensar junto da sincronização (não faz sentido sincronizar sem identificar o educador dono dos dados) |
+| Armazenamento | 100% local (SQLite) + sincronização por e-mail/senha como backup — **código pronto, migração remota (tabelas + RLS no Supabase) ainda não aplicada**, então não sincroniza de fato ainda | Já é a versão completa da sincronização básica; falta aplicar a migração e testar em device. Merge de conflito multi-dispositivo fica pro gap abaixo |
+| Login | E-mail/senha via Supabase Auth, tela de login/cadastro gate o app (`src/app/(auth)/`) — implementado nesta sessão, ainda não testado em device físico | — |
 | Frequência cardíaca | Digitada manualmente num modal | "Integração automática com sensor Bluetooth" — já anunciada como texto de interface no modal de FC (`sessao/[id].tsx`), ainda não implementada |
 | Edição/exclusão de cliente, sessão ou leitura | Não existe (só criar e listar) | Não definida ainda — precisa de decisão de produto (ex.: corrigir uma leitura errada registrada sem querer) |
 | Transcrição de voz na nota de fechamento | Não existe | O protótipo visual tinha um botão de microfone; não implementado por não haver serviço de speech-to-text integrado ainda |
