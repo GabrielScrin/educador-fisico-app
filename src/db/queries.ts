@@ -1,3 +1,4 @@
+import * as Crypto from 'expo-crypto';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 export type Cliente = {
@@ -5,6 +6,9 @@ export type Cliente = {
   nome: string;
   contato: string | null;
   criado_em: string;
+  uuid: string;
+  atualizado_em: string;
+  sincronizado_em: string | null;
 };
 
 export type Sessao = {
@@ -13,6 +17,9 @@ export type Sessao = {
   iniciada_em: string;
   finalizada_em: string | null;
   nota: string | null;
+  uuid: string;
+  atualizado_em: string;
+  sincronizado_em: string | null;
 };
 
 export type TipoLeitura = 'borg' | 'omni' | 'dor' | 'fc';
@@ -23,6 +30,9 @@ export type Leitura = {
   tipo: TipoLeitura;
   valor: number;
   registrada_em: string;
+  uuid: string;
+  atualizado_em: string;
+  sincronizado_em: string | null;
 };
 
 export type ResumoSessao = Sessao & {
@@ -136,9 +146,10 @@ export async function criarCliente(
   nome: string,
   contato: string | null,
 ): Promise<number> {
+  const agora = new Date().toISOString();
   const resultado = await db.runAsync(
-    `INSERT INTO clientes (nome, contato, criado_em) VALUES (?, ?, ?)`,
-    [nome.trim(), contato?.trim() || null, new Date().toISOString()],
+    `INSERT INTO clientes (nome, contato, criado_em, uuid, atualizado_em) VALUES (?, ?, ?, ?, ?)`,
+    [nome.trim(), contato?.trim() || null, agora, Crypto.randomUUID(), agora],
   );
   return resultado.lastInsertRowId;
 }
@@ -184,9 +195,10 @@ export async function listarSessoesPorCliente(
 }
 
 export async function criarSessao(db: SQLiteDatabase, clienteId: number): Promise<number> {
+  const agora = new Date().toISOString();
   const resultado = await db.runAsync(
-    `INSERT INTO sessoes (cliente_id, iniciada_em) VALUES (?, ?)`,
-    [clienteId, new Date().toISOString()],
+    `INSERT INTO sessoes (cliente_id, iniciada_em, uuid, atualizado_em) VALUES (?, ?, ?, ?)`,
+    [clienteId, agora, Crypto.randomUUID(), agora],
   );
   return resultado.lastInsertRowId;
 }
@@ -257,7 +269,11 @@ export async function atualizarNotaSessao(
   sessaoId: number,
   nota: string | null,
 ): Promise<void> {
-  await db.runAsync(`UPDATE sessoes SET nota = ? WHERE id = ?`, [nota?.trim() || null, sessaoId]);
+  await db.runAsync(`UPDATE sessoes SET nota = ?, atualizado_em = ? WHERE id = ?`, [
+    nota?.trim() || null,
+    new Date().toISOString(),
+    sessaoId,
+  ]);
 }
 
 export async function finalizarSessao(
@@ -265,9 +281,11 @@ export async function finalizarSessao(
   sessaoId: number,
   nota: string | null,
 ): Promise<void> {
-  await db.runAsync(`UPDATE sessoes SET finalizada_em = ?, nota = ? WHERE id = ?`, [
-    new Date().toISOString(),
+  const agora = new Date().toISOString();
+  await db.runAsync(`UPDATE sessoes SET finalizada_em = ?, nota = ?, atualizado_em = ? WHERE id = ?`, [
+    agora,
     nota?.trim() || null,
+    agora,
     sessaoId,
   ]);
 }
@@ -278,9 +296,10 @@ export async function registrarLeitura(
   tipo: TipoLeitura,
   valor: number,
 ): Promise<void> {
+  const agora = new Date().toISOString();
   await db.runAsync(
-    `INSERT INTO leituras (sessao_id, tipo, valor, registrada_em) VALUES (?, ?, ?, ?)`,
-    [sessaoId, tipo, valor, new Date().toISOString()],
+    `INSERT INTO leituras (sessao_id, tipo, valor, registrada_em, uuid, atualizado_em) VALUES (?, ?, ?, ?, ?, ?)`,
+    [sessaoId, tipo, valor, agora, Crypto.randomUUID(), agora],
   );
 }
 

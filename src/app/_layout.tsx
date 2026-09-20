@@ -10,12 +10,13 @@ import { useFonts } from 'expo-font';
 import { Stack, Theme, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
-import type { SQLiteDatabase } from 'expo-sqlite';
 import { SQLiteProvider } from 'expo-sqlite';
 import { useEffect } from 'react';
 
 import { Colors } from '@/constants/theme';
-import { MIGRATIONS } from '@/db/schema';
+import { applyMigrations } from '@/db/migrate';
+import { AuthProvider, useAuth } from '@/hooks/use-auth';
+import { SyncProvider } from '@/hooks/use-sync';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -37,15 +38,6 @@ const NAV_THEME: Theme = {
   },
 };
 
-async function migrar(db: SQLiteDatabase) {
-  // Desligado por padrão no SQLite — sem isso, o ON DELETE CASCADE do schema (sessoes/leituras
-  // ao excluir um cliente, leituras ao excluir uma sessão) não é aplicado de verdade.
-  await db.execAsync('PRAGMA foreign_keys = ON;');
-  for (const statement of MIGRATIONS) {
-    await db.execAsync(statement);
-  }
-}
-
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
@@ -56,26 +48,47 @@ export default function RootLayout() {
     MaterialSymbols_400Regular,
   });
 
-  useEffect(() => {
-    if (fontsLoaded) SplashScreen.hideAsync();
-  }, [fontsLoaded]);
+  return (
+    <SQLiteProvider databaseName="educador-fisico.db" onInit={applyMigrations}>
+      <AuthProvider>
+        <SyncProvider>
+          <ThemeProvider value={NAV_THEME}>
+            <StatusBar style="light" />
+            <RootNavigator fontsLoaded={fontsLoaded} />
+          </ThemeProvider>
+        </SyncProvider>
+      </AuthProvider>
+    </SQLiteProvider>
+  );
+}
 
-  if (!fontsLoaded) return null;
+// Só libera a navegação quando fontes e sessão de auth estão prontas — evita piscar a tela de
+// login por uma fração de segundo pra quem já está logado (Supabase lê a sessão salva no
+// AsyncStorage de forma assíncrona).
+function RootNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
+  const { session, carregando } = useAuth();
+  const pronto = fontsLoaded && !carregando;
+
+  useEffect(() => {
+    if (pronto) SplashScreen.hideAsync();
+  }, [pronto]);
+
+  if (!pronto) return null;
 
   return (
-    <SQLiteProvider databaseName="educador-fisico.db" onInit={migrar}>
-      <ThemeProvider value={NAV_THEME}>
-        <StatusBar style="light" />
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="cliente/novo" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="cliente/[id]" />
-          <Stack.Screen name="cliente/[id]/editar" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="sessao/[id]" options={{ gestureEnabled: false }} />
-          <Stack.Screen name="sessao/[id]/resumo" options={{ gestureEnabled: false }} />
-          <Stack.Screen name="escalas" options={{ presentation: 'modal' }} />
-        </Stack>
-      </ThemeProvider>
-    </SQLiteProvider>
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Protected guard={!!session}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="cliente/novo" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="cliente/[id]" />
+        <Stack.Screen name="cliente/[id]/editar" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="sessao/[id]" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="sessao/[id]/resumo" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="escalas" options={{ presentation: 'modal' }} />
+      </Stack.Protected>
+      <Stack.Protected guard={!session}>
+        <Stack.Screen name="(auth)" />
+      </Stack.Protected>
+    </Stack>
   );
 }

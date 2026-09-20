@@ -1,6 +1,6 @@
 import Constants from 'expo-constants';
 import type { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
@@ -8,11 +8,23 @@ import { MaterialSymbol } from '@/components/material-symbol';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Radius, Spacing } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
+import { useSync } from '@/hooks/use-sync';
 import { useTheme } from '@/hooks/use-theme';
+import { supabase } from '@/lib/supabase';
 
 export default function Ajustes() {
   const theme = useTheme();
   const versao = Constants.expoConfig?.version ?? '—';
+  const { session } = useAuth();
+  const { estado, ultimaSincronizacao, erro, sincronizarAgora } = useSync();
+
+  function sair() {
+    Alert.alert('Sair da conta', 'Seus dados continuam salvos neste aparelho.', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Sair', style: 'destructive', onPress: () => supabase.auth.signOut() },
+    ]);
+  }
 
   return (
     <ThemedView style={styles.container}>
@@ -27,17 +39,59 @@ export default function Ajustes() {
         </View>
 
         <ScrollView contentContainerStyle={styles.scroll}>
+          <Secao titulo="Conta">
+            <Linha icone="account_circle" titulo="Logado como" subtitulo={session?.user.email ?? '—'} />
+            <Pressable
+              onPress={sair}
+              style={({ pressed }) => [
+                styles.linhaClicavel,
+                { backgroundColor: pressed ? theme.backgroundSelected : 'transparent' },
+              ]}
+            >
+              <View style={[styles.icone, { backgroundColor: theme.backgroundSelected }]}>
+                <MaterialSymbol name="logout" size={18} color={theme.danger} />
+              </View>
+              <ThemedText type="smallBold" style={{ color: theme.danger }}>
+                Sair
+              </ThemedText>
+            </Pressable>
+          </Secao>
+
           <Secao titulo="Dados e privacidade">
             <Linha
               icone="phone_iphone"
               titulo="Armazenamento local"
-              subtitulo="Todos os dados ficam neste aparelho (SQLite), sem sincronização em nuvem."
+              subtitulo="Todos os dados ficam neste aparelho (SQLite) — a nuvem é backup, não substitui isso."
             />
-            <Linha
-              icone="lock"
-              titulo="Sem login"
-              subtitulo="O app ainda não identifica o educador — pensado pra um uso individual, num único aparelho."
-            />
+            <Pressable
+              onPress={sincronizarAgora}
+              disabled={estado === 'sincronizando'}
+              style={({ pressed }) => [
+                styles.linhaClicavel,
+                { backgroundColor: pressed ? theme.backgroundSelected : 'transparent' },
+              ]}
+            >
+              <View style={[styles.icone, { backgroundColor: theme.backgroundSelected }]}>
+                <MaterialSymbol
+                  name={estado === 'erro' ? 'cloud_off' : 'cloud_sync'}
+                  size={18}
+                  color={estado === 'erro' ? theme.danger : theme.accent}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <ThemedText type="smallBold">
+                  {estado === 'sincronizando' ? 'Sincronizando...' : 'Sincronização'}
+                </ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {textoStatusSync(estado, ultimaSincronizacao, erro)}
+                </ThemedText>
+              </View>
+              {estado !== 'sincronizando' && (
+                <ThemedText type="small" style={{ color: theme.accent }}>
+                  Sincronizar
+                </ThemedText>
+              )}
+            </Pressable>
           </Secao>
 
           <Secao titulo="Referência clínica">
@@ -76,6 +130,18 @@ export default function Ajustes() {
       </SafeAreaView>
     </ThemedView>
   );
+}
+
+function textoStatusSync(
+  estado: 'ocioso' | 'sincronizando' | 'erro',
+  ultimaSincronizacao: Date | null,
+  erro: string | null,
+): string {
+  if (estado === 'sincronizando') return 'Enviando e buscando dados da nuvem...';
+  if (estado === 'erro') return erro ?? 'Falha ao sincronizar.';
+  if (!ultimaSincronizacao) return 'Toque para sincronizar agora.';
+  const hora = ultimaSincronizacao.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return `Sincronizado às ${hora}.`;
 }
 
 function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
