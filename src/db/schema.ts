@@ -55,4 +55,13 @@ export const MIGRATIONS = [
   CREATE UNIQUE INDEX IF NOT EXISTS idx_sessoes_uuid ON sessoes(uuid);
   CREATE UNIQUE INDEX IF NOT EXISTS idx_leituras_uuid ON leituras(uuid);
   `,
+  // Linhas criadas antes do passo anterior ficaram com atualizado_em NULL (a coluna nova entra
+  // sempre nula) — a tabela remota exige NOT NULL nessa coluna, então o push falhava com "null
+  // value in column atualizado_em" pra qualquer dado criado antes desta sessão. Backfill usando
+  // o carimbo de criação de cada linha como aproximação razoável de "última alteração".
+  `
+  UPDATE clientes SET atualizado_em = criado_em WHERE atualizado_em IS NULL;
+  UPDATE sessoes SET atualizado_em = iniciada_em WHERE atualizado_em IS NULL;
+  UPDATE leituras SET atualizado_em = registrada_em WHERE atualizado_em IS NULL;
+  `,
 ];

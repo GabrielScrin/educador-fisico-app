@@ -12,11 +12,13 @@ import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { SQLiteProvider } from 'expo-sqlite';
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 import { applyMigrations } from '@/db/migrate';
 import { AuthProvider, useAuth } from '@/hooks/use-auth';
 import { SyncProvider } from '@/hooks/use-sync';
+import { configurarPwaWeb } from '@/lib/pwa-web';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -39,6 +41,27 @@ const NAV_THEME: Theme = {
 };
 
 export default function RootLayout() {
+  return (
+    <SQLiteProvider databaseName="educador-fisico.db" onInit={applyMigrations}>
+      <AuthProvider>
+        <SyncProvider>
+          <ThemeProvider value={NAV_THEME}>
+            <StatusBar style="light" />
+            <RootNavigator />
+          </ThemeProvider>
+        </SyncProvider>
+      </AuthProvider>
+    </SQLiteProvider>
+  );
+}
+
+// useFonts precisa rodar aqui dentro, não em RootLayout: `SQLiteProvider` é memoizado com um
+// comparador que ignora `children` (só compara databaseName/onInit/etc — ver
+// node_modules/expo-sqlite/build/hooks.js), então depois do primeiro render ele nunca mais
+// atualiza a árvore de filhos. Se `fontsLoaded` fosse calculado em RootLayout e só passado como
+// prop pra baixo, ficaria "congelado" no valor que existia no instante em que o provider montou
+// (quase sempre `false`) — a splash screen nunca sumia. Achado testando no device físico.
+function RootNavigator() {
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -47,31 +70,24 @@ export default function RootLayout() {
     Inter_800ExtraBold,
     MaterialSymbols_400Regular,
   });
-
-  return (
-    <SQLiteProvider databaseName="educador-fisico.db" onInit={applyMigrations}>
-      <AuthProvider>
-        <SyncProvider>
-          <ThemeProvider value={NAV_THEME}>
-            <StatusBar style="light" />
-            <RootNavigator fontsLoaded={fontsLoaded} />
-          </ThemeProvider>
-        </SyncProvider>
-      </AuthProvider>
-    </SQLiteProvider>
-  );
-}
-
-// Só libera a navegação quando fontes e sessão de auth estão prontas — evita piscar a tela de
-// login por uma fração de segundo pra quem já está logado (Supabase lê a sessão salva no
-// AsyncStorage de forma assíncrona).
-function RootNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
   const { session, carregando } = useAuth();
   const pronto = fontsLoaded && !carregando;
 
   useEffect(() => {
     if (pronto) SplashScreen.hideAsync();
   }, [pronto]);
+
+  // PWA: só na web, e só depois que o app está de pé — não bloqueia o primeiro carregamento.
+  // Ver public/sw.js (cache do shell, não garante offline completo) e src/lib/pwa-web.ts.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    configurarPwaWeb();
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch((erro) => {
+        console.error('Falha ao registrar service worker:', erro);
+      });
+    }
+  }, []);
 
   if (!pronto) return null;
 

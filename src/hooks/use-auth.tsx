@@ -15,10 +15,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [carregando, setCarregando] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setCarregando(false);
-    });
+    // Sem .catch() aqui, uma rejeição (ex.: leitura do AsyncStorage falhar) deixava
+    // `carregando` travado em true pra sempre — tela em branco sem erro nenhum, achado
+    // testando no device físico (ver PASSAGEM_DE_PLANTAO.md).
+    supabase.auth
+      .getSession()
+      .then(({ data }) => setSession(data.session))
+      .catch((erro) => console.error('Falha ao carregar sessão salva:', erro))
+      .finally(() => setCarregando(false));
 
     const { data: assinatura } = supabase.auth.onAuthStateChange((_evento, novaSessao) => {
       setSession(novaSessao);
