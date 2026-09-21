@@ -111,10 +111,10 @@ tempo dentro da sessão quanto médias/gráficos de evolução entre sessões.
 
 | Área | Hoje (MVP) | Versão completa prevista |
 |---|---|---|
-| Armazenamento | 100% local (SQLite) + sincronização por e-mail/senha como backup — **código pronto, migração remota (tabelas + RLS no Supabase) ainda não aplicada**, então não sincroniza de fato ainda | Já é a versão completa da sincronização básica; falta aplicar a migração e testar em device. Merge de conflito multi-dispositivo fica pro gap abaixo |
-| Login | E-mail/senha via Supabase Auth, tela de login/cadastro gate o app (`src/app/(auth)/`) — implementado nesta sessão, ainda não testado em device físico | — |
+| Armazenamento | 100% local (SQLite) + sincronização por e-mail/senha como backup — código e migração remota (tabelas + RLS no Supabase) aplicados | Falta testar login e sincronização ponta a ponta em device. Merge de conflito multi-dispositivo fica pro gap abaixo |
+| Login | E-mail/senha via Supabase Auth, tela de login/cadastro protege o app (`src/app/(auth)/`) — backend pronto, ainda não testado em device físico | — |
 | Frequência cardíaca | Digitada manualmente num modal | "Integração automática com sensor Bluetooth" — já anunciada como texto de interface no modal de FC (`sessao/[id].tsx`), ainda não implementada |
-| Edição/exclusão de cliente, sessão ou leitura | Não existe (só criar e listar) | Não definida ainda — precisa de decisão de produto (ex.: corrigir uma leitura errada registrada sem querer) |
+| Edição/exclusão de cliente, sessão ou leitura | Implementada; leitura pode ser editada durante a sessão e excluída também pelo prontuário | Falta validar os fluxos em device físico |
 | Transcrição de voz na nota de fechamento | Não existe | O protótipo visual tinha um botão de microfone; não implementado por não haver serviço de speech-to-text integrado ainda |
 | Multi-dispositivo | Não existe — dado mora só naquele celular | Depende da sincronização acima |
 

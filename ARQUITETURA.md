@@ -12,10 +12,9 @@ falta, decisões recentes), ver `PASSAGEM_DE_PLANTAO.md`.
 - Repositório único: `G:\dev\educador-fisico-app` (Windows). Sem monorepo, sem pacotes
   separados.
 - Backend: projeto Supabase `apyfxpegxjfgznmfvqzq` (ver `SETUP.md`) — login (e-mail/senha) e
-  sincronização de clientes/sessões/leituras foram implementados em código na sessão de
-  2026-09-20 (ver seção "Autenticação e sincronização" abaixo). **A migração remota (tabelas +
-  RLS) ainda não foi aplicada no projeto** — o app não vai sincronizar de verdade até isso
-  rodar. SQLite local continua sendo a fonte primária de dados em qualquer cenário.
+  sincronização de clientes/sessões/leituras foram implementados em código em 2026-09-20; a
+  migração remota (tabelas + RLS) foi aplicada e validada em 2026-09-21. SQLite local continua
+  sendo a fonte primária de dados em qualquer cenário.
 - Conteúdo clínico das escalas (`src/constants/scales.ts`) vem de material de referência do
   educador físico Rafael de Souza Iyama (CREF 010255) — fonte externa ao código, citada no
   comentário do próprio arquivo. Se um valor for revisado, é o Rafael quem revisa, não uma
@@ -85,8 +84,8 @@ telas por cima do grupo de abas, escondendo a tab bar automaticamente.
 | Aba Evolução | ✅ | Agregado do consultório (sessões na semana, ativos no mês, alertas de dor) |
 | Aba Ajustes | ✅ | Conta (e-mail logado, sair), status real de sincronização, atribuição clínica |
 | Escalas de referência (consulta livre) | ✅ | `/escalas`, fora do fluxo de registro |
-| Login / identificação do educador | 🟡 | Código pronto (e-mail/senha via Supabase Auth), não testado em device ainda |
-| Sync com Supabase | 🟡 | Código pronto (push+pull por uuid, ver seção abaixo), **migração remota (tabelas/RLS) ainda não aplicada** — não sincroniza de verdade até isso rodar |
+| Login / identificação do educador | 🟡 | Código e backend prontos (e-mail/senha via Supabase Auth), não testado em device ainda |
+| Sync com Supabase | 🟡 | Código pronto (push+pull por uuid) e migração remota aplicada em 2026-09-21; falta teste ponta a ponta em device |
 | FC via Bluetooth | ❌ | Anunciado na UI como "próxima versão", não implementado |
 | Editar/excluir cliente, sessão ou leitura | ✅ | Cliente: editar/excluir; sessão: editar nota/excluir; leitura: editar durante sessão e excluir |
 | Transcrição de voz na nota | ❌ | Existia no protótipo visual (Stitch), não implementada — sem serviço de speech-to-text integrado |
@@ -94,7 +93,7 @@ telas por cima do grupo de abas, escondendo a tab bar automaticamente.
 
 _Atualizado na sessão de 2026-09-20 (login + sincronização com Supabase, código completo — ver seção "Autenticação e sincronização")._ Sessão anterior: 2026-09-10 (reskin "Clinical High-Contrast Dark" + navegação em abas).
 
-## Autenticação e sincronização (código pronto, migração remota pendente)
+## Autenticação e sincronização (código e migração remota prontos)
 
 Implementado na sessão de 2026-09-20, escolha do usuário: login por e-mail/senha (Supabase Auth),
 sincronização como *backup* — SQLite local continua sendo a fonte primária, a nuvem existe pra
@@ -133,13 +132,11 @@ do `PRODUTO.md` mais adiante.
   for editada em dois aparelhos entre dois syncs, o último push vence sem aviso. Aceitável hoje
   (uso single-device); vira relevante quando o gap "multi-dispositivo" for endereçado de verdade.
 
-**Schema remoto** (SQL em `remote_migration.sql`, gerado na sessão — ainda não aplicado): tabelas
+**Schema remoto** (SQL em `remote_migration.sql`, aplicado em 2026-09-21): tabelas
 `clientes`/`sessoes`/`leituras` no schema `public`, PK `id uuid` (mesmo valor do `uuid` local),
 `educador_id uuid references auth.users(id) default auth.uid()`, RLS habilitado com policy
-`educador_id = auth.uid()` pra tudo (select/insert/update/delete). **Precisa ser aplicado**
-manualmente ou com aprovação explícita — ver `PASSAGEM_DE_PLANTAO.md` para o motivo (bloqueio do
-classificador de modo automático, "Production Deploy": DDL em produção não roda sem confirmação
-explícita, mesmo com o token de acesso disponível no `.env`).
+`educador_id = auth.uid()` pra tudo (select/insert/update/delete). A aplicação foi validada no
+banco conferindo tabelas, RLS, policies, índices e grants do papel `authenticated`.
 
 ## Armadilhas conhecidas
 

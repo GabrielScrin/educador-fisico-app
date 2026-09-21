@@ -36,20 +36,9 @@ saber de quem é o dado.
 
 ## O que NÃO foi feito (bloqueios reais, não esquecimento)
 
-- **Migração remota não foi aplicada.** O SQL (tabelas `clientes`/`sessoes`/`leituras` + RLS por
-  `educador_id = auth.uid()`) está pronto em `remote_migration.sql`, na raiz do repo. Duas coisas
-  na ordem:
-  1. Tentei aplicar via Management API (`SUPABASE_ACCESS_TOKEN` do `.env`, comando avulso, sem
-     `supabase login` global — como o próprio `.env` já instruía). Primeira tentativa foi
-     bloqueada pelo classificador de modo automático do Claude Code ("Production Deploy" — DDL em
-     produção pede aprovação explícita, faz sentido). Segunda tentativa (usuário aprovou) passou
-     da permissão mas deu **timeout de conexão** — descobri que o projeto Supabase
-     `apyfxpegxjfgznmfvqzq` está com status `INACTIVE` (pausado, provavelmente por inatividade
-     desde a criação em 2026-09-08).
-  2. Perguntei se podia restaurar o projeto e já aplicar a migração. **O usuário pediu
-     explicitamente pra eu não mexer** ("não faça nada, depois eu rodo as migrations") — ele vai
-     restaurar e rodar `remote_migration.sql` por conta própria. **Não tentar de novo sem ele
-     pedir.**
+- **Migração remota aplicada em 2026-09-21.** O projeto `apyfxpegxjfgznmfvqzq` foi restaurado e o
+  SQL de `remote_migration.sql` foi executado em uma transação pela Management API. A validação
+  confirmou as três tabelas, RLS, policies, índices e grants para `authenticated`.
 - **Nada disso foi testado em device físico.** O celular não estava conectado via USB nesta
   sessão (só na sessão de 2026-09-13). Login, sincronização, e até o app em si depois dessas
   mudanças no `_layout.tsx` (guard de rota novo) — nada disso rodou de verdade num aparelho
@@ -70,7 +59,7 @@ saber de quem é o dado.
 
 ## O que falta (ordem que o usuário pediu, dos gaps do MVP)
 
-1. ~~Sincronização~~ — código pronto, migração remota pendente (usuário vai aplicar).
+1. ~~Sincronização~~ — código e migração remota prontos; falta teste ponta a ponta em device.
 2. ~~Login~~ — código pronto, não testado em device.
 3. **FC via Bluetooth** — próximo item, ainda não iniciado.
 4. ~~Editar/excluir cliente, sessão ou leitura~~ — código integrado, ainda requer teste em device.
