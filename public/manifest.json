@@ -1,0 +1,20 @@
+{
+  "name": "Educador Físico",
+  "short_name": "Educador Físico",
+  "description": "Registro de esforço e dor do cliente, sessão a sessão, pro educador físico usar em pé durante o treino.",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0B0F12",
+  "theme_color": "#0B0F12",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/icon-1024.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
