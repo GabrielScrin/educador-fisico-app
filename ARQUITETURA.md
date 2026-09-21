@@ -23,6 +23,9 @@ falta, decisões recentes), ver `PASSAGEM_DE_PLANTAO.md`.
   "Sessão Ativa V3 Plus", "Clientes & Início Rápido", "Prontuário & Evolução", "Seletor em
   Tela Cheia", "Resumo & Fechamento de Treino", "Escalas de Referência"). O design foi portado
   pro código com funcionalidade real por trás — ver seção de decisões abaixo.
+- Build web (PWA) desde 2026-09-21, pra dar link de preview pro time — ver seção "Web/PWA"
+  abaixo. Deploy pensado pra Vercel (`vercel.json` já no repo); conectar o projeto ao GitHub no
+  dashboard da Vercel ainda é passo manual do usuário.
 
 ## Estrutura de código
 
@@ -84,16 +87,17 @@ telas por cima do grupo de abas, escondendo a tab bar automaticamente.
 | Aba Evolução | ✅ | Agregado do consultório (sessões na semana, ativos no mês, alertas de dor) |
 | Aba Ajustes | ✅ | Conta (e-mail logado, sair), status real de sincronização, atribuição clínica |
 | Escalas de referência (consulta livre) | ✅ | `/escalas`, fora do fluxo de registro |
-| Login / identificação do educador | 🟡 | Código e backend prontos (e-mail/senha via Supabase Auth), não testado em device ainda |
-| Sync com Supabase | 🟡 | Código pronto (push+pull por uuid) e migração remota aplicada em 2026-09-21; falta teste ponta a ponta em device |
+| Login / identificação do educador | ✅ | E-mail/senha via Supabase Auth, testado ponta a ponta em device físico (cadastro + login + guard de rota) em 2026-09-21 |
+| Sync com Supabase | ✅ | Push+pull por uuid, migração remota aplicada e testada ponta a ponta em device físico em 2026-09-21 (dados confirmados nas 3 tabelas remotas) |
+| Build web / PWA | 🟡 | Renderiza e builda certo (`expo export --platform web`, testado no browser), instalável (manifest + service worker) — **deploy na Vercel ainda pendente** (usuário vai conectar o repo pelo dashboard) |
 | FC via Bluetooth | ❌ | Anunciado na UI como "próxima versão", não implementado |
 | Editar/excluir cliente, sessão ou leitura | ✅ | Cliente: editar/excluir; sessão: editar nota/excluir; leitura: editar durante sessão e excluir |
 | Transcrição de voz na nota | ❌ | Existia no protótipo visual (Stitch), não implementada — sem serviço de speech-to-text integrado |
 | Multi-dispositivo (2º aparelho do mesmo educador) | ❌ | Depende do sync acima estar rodando de verdade; sync atual não faz merge de conflito (last-write-wins), só push+pull simples |
 
-_Atualizado na sessão de 2026-09-20 (login + sincronização com Supabase, código completo — ver seção "Autenticação e sincronização")._ Sessão anterior: 2026-09-10 (reskin "Clinical High-Contrast Dark" + navegação em abas).
+_Atualizado na sessão de 2026-09-21 (login+sync testados ponta a ponta em device físico, 3 bugs reais corrigidos, build web/PWA nova — ver seções "Autenticação e sincronização" e "Web/PWA")._ Sessões anteriores: 2026-09-20 (login+sync, código), 2026-09-15 (CRUD), 2026-09-10 (reskin "Clinical High-Contrast Dark" + navegação em abas).
 
-## Autenticação e sincronização (código e migração remota prontos)
+## Autenticação e sincronização (testado ponta a ponta em device físico, 2026-09-21)
 
 Implementado na sessão de 2026-09-20, escolha do usuário: login por e-mail/senha (Supabase Auth),
 sincronização como *backup* — SQLite local continua sendo a fonte primária, a nuvem existe pra
@@ -138,6 +142,44 @@ do `PRODUTO.md` mais adiante.
 `educador_id = auth.uid()` pra tudo (select/insert/update/delete). A aplicação foi validada no
 banco conferindo tabelas, RLS, policies, índices e grants do papel `authenticated`.
 
+**Teste ponta a ponta em device físico (2026-09-21)**: cadastro de conta nova (e-mail/senha),
+login, e sync confirmados rodando de verdade — inclusive consultando as 3 tabelas remotas via
+API depois do sync pra confirmar que os dados (1 cliente + 2 sessões + 3 leituras pré-existentes
+no SQLite local) chegaram certos, com `educador_id`/FKs corretos. Esse teste encontrou e corrigiu
+3 bugs reais que só apareciam rodando de verdade (nenhum pego por `tsc`/lint) — ver "Armadilhas
+conhecidas" abaixo: `SQLiteProvider` memoizado travando `fontsLoaded`, `getSession()` sem
+`.catch()` travando a tela em branco, e `atualizado_em` nulo em linhas antigas quebrando o push.
+
+## Web/PWA (2026-09-21, deploy pendente)
+
+Pedido do usuário: uma versão web pra mandar link de preview pro time. `expo-sqlite` tem suporte
+a web em alpha — três peças precisaram ser configuradas do zero pra funcionar (detalhe completo
+com sintoma/causa/fix em "Armadilhas conhecidas" → "`expo-sqlite` no target `web`"):
+
+1. `metro.config.js` (novo, o projeto não tinha) — `.wasm` como asset resolvível +
+   `Cross-Origin-Opener-Policy`/`Cross-Origin-Embedder-Policy` no dev server.
+2. `app.json` → `web.output: "single"` (SPA, não `"static"`/SSG — o client do Supabase toca
+   `window` na inicialização, o que quebra pré-renderização em Node).
+3. PWA de verdade, não só "roda no browser": `public/manifest.json` (nome, ícone, `display:
+   standalone`, cores do tema), `public/sw.js` (service worker simples — cacheia o shell da app
+   pra abrir mais rápido em visitas repetidas, **não garante uso offline completo**: SQLite via
+   wasm e sync continuam precisando de rede) e `src/lib/pwa-web.ts` (injeta as tags de PWA —
+   manifest, theme-color, ícone pro iOS — em runtime, porque `+html.tsx` do expo-router não é
+   aplicado no modo `"single"`).
+
+**Deploy**: `vercel.json` já no repo (build command, output directory, os mesmos cabeçalhos
+COOP/COEP pra produção, rewrite de SPA pra toda rota cair em `index.html`). Não há projeto Vercel
+conectado a este repositório ainda — nem na conta acessível via MCP (`gabrielscrin's projects`,
+mesma conta do EAS — 9 projetos, nenhum deste repo), nem webhook no GitHub, nem `.vercel/` local.
+A ferramenta MCP `create_project` da Vercel também se mostrou quebrada nesta sessão (sempre
+retorna `"missing required property name"` mesmo passando `name` corretamente, testado várias
+formas) — não usar de novo sem verificar se foi corrigida. **Caminho escolhido pelo usuário**:
+conectar o repositório pelo dashboard da Vercel (Import Git Repository), não via CLI/API — fica
+com deploy automático a cada push, sem precisar de login recorrente. Configurar no dashboard:
+Build Command `npx expo export --platform web`, Output Directory `dist`, Framework Other, e as
+env vars `EXPO_PUBLIC_SUPABASE_URL`/`EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (precisam existir em
+build time — o Expo embute `EXPO_PUBLIC_*` no bundle estaticamente).
+
 ## Armadilhas conhecidas
 
 ### `ON DELETE CASCADE` exige `PRAGMA foreign_keys = ON`
@@ -163,15 +205,44 @@ banco conferindo tabelas, RLS, policies, índices e grants do papel `authenticat
 - **Como aplicar**: depois de criar uma rota nova, rode `npx expo export --platform ios
   --output-dir /tmp/x` (ou `expo start`) antes de confiar no resultado de `tsc --noEmit`.
 
-### `expo-sqlite` não builda pra `web`
+### `expo-sqlite` no target `web` — resolvido em 2026-09-21, precisa de 3 peças
 
-- **Sintoma**: `npx expo export --platform web` falha com
-  `Unable to resolve module ./wa-sqlite/wa-sqlite.wasm`.
-- **Causa raiz**: o app nunca configurou o loader de wasm que o `expo-sqlite` precisa no target
-  web (o `app.json` tem um bloco `"web"` só porque veio do template padrão do `create-expo-app`
-  — o projeto real nunca teve o alvo web como prioridade, é 100% mobile).
-- **Fix**: não é um bug pra corrigir agora — **use `--platform ios` ou `--platform android`**
-  pra validar bundle/compilação sem device, nunca `--platform web`.
+_(Esta entrada dizia pra simplesmente evitar `--platform web`. Isso mudou quando o usuário pediu
+uma build web/PWA pra mostrar pro time — resolvido de verdade, documentado abaixo.)_
+
+- **Sintoma 1**: `npx expo export --platform web` falha com `Unable to resolve module
+  ./wa-sqlite/wa-sqlite.wasm`.
+  - **Causa**: o Metro não trata `.wasm` como asset por padrão, e o projeto nunca teve
+    `metro.config.js` (rodava só no default do `expo/metro-config`).
+  - **Fix**: `npx expo customize metro.config.js` pra gerar o arquivo, depois
+    `config.resolver.assetExts.push('wasm')`. Doc oficial (`/versions/v57.0.0/sdk/sqlite/#web-setup`)
+    menciona isso mas **não** publica o snippet completo de `metro.config.js` na versão em
+    markdown (`/sdk/sqlite.md`) — só descreve em prosa. Cuidado ao pedir pra IA resumir essa
+    página: numa tentativa ela alucinou um `babelTransformerPath: require.resolve(
+    'react-native-svg-transformer')` que não existe na doc real nem faz sentido aqui (esse
+    pacote nem é dependência do projeto) — sempre conferir contra o `.md` bruto
+    (`curl .../sdk/sqlite.md`), não confiar no resumo de uma única passada.
+- **Sintoma 2**: depois do fix acima, o worker do wa-sqlite usa `SharedArrayBuffer`, que exige
+  os cabeçalhos `Cross-Origin-Opener-Policy: same-origin` e `Cross-Origin-Embedder-Policy:
+  credentialless` — sem eles o banco falha silenciosamente no browser.
+  - **Fix**: `config.server.enhanceMiddleware` no `metro.config.js` (dev/Metro) + `headers` no
+    `vercel.json` (produção) setando os dois cabeçalhos pra toda rota.
+- **Sintoma 3**: com o wasm resolvendo, `expo export --platform web` ainda quebrava com
+  `ReferenceError: window is not defined` durante a "static rendering".
+  - **Causa raiz**: `app.json` tinha `web.output: "static"` (o default do expo-router faz SSG —
+    pré-renderiza cada rota em Node antes de servir). O client do Supabase (`src/lib/supabase.ts`)
+    usa `AsyncStorage` como storage adapter, que no target web é um shim em cima de
+    `window.localStorage` — e `createClient()`/`getSession()` tocam esse storage na
+    inicialização, não só dentro de efeito React. Em Node (SSG) não existe `window`, crash.
+  - **Fix**: `web.output: "single"` no `app.json` (SPA — um HTML shell, roteamento 100%
+    client-side via History API). Certo pra este app de qualquer forma: é uma ferramenta
+    autenticada, não um site de conteúdo que se beneficia de SEO por rota.
+  - **Efeito colateral**: `src/app/+html.tsx` (customização oficial do `<head>` do expo-router)
+    só é aplicado no modo `"static"` — em `"single"` é ignorado. As tags de PWA (manifest,
+    theme-color, apple-touch-icon) precisaram ser injetadas em runtime via
+    `src/lib/pwa-web.ts`, chamado num `useEffect` guardado por `Platform.OS === 'web'` em
+    `src/app/_layout.tsx` — nunca criar um `+html.tsx` neste projeto enquanto `output` for
+    `"single"`, ele não faz nada.
 
 ### React Compiler proíbe `Date.now()`/`new Date()` dentro de `useMemo`
 
@@ -248,6 +319,56 @@ banco conferindo tabelas, RLS, policies, índices e grants do papel `authenticat
 - **Por que importa**: qualquer provider que precise de `useSQLiteContext()` (ex.: `SyncProvider`
   em `src/hooks/use-sync.tsx`) pode ficar aninhado direto dentro de `<SQLiteProvider>` sem se
   preocupar em esperar o banco — se ele renderizou, o banco já está pronto.
+
+### `SQLiteProvider` é memoizado ignorando `children` — nunca calcule valor externo pra passar como prop através dele
+
+- **Sintoma**: achado testando login em device físico (2026-09-21) — app instalado, sessão
+  autenticava (confirmado no Supabase), mas a tela ficava em branco pra sempre, sem erro nenhum
+  no `adb logcat`/LogBox.
+- **Causa raiz**: `SQLiteProvider` é `React.memo`-izado com um comparador customizado que só
+  compara `databaseName`/`options`/`assetSource`/`directory`/`onInit`/`onError`/`useSuspense` —
+  **não compara `children`** (confirmado lendo o código-fonte, não só a doc). `RootLayout` antes
+  chamava `useFonts()` e passava `fontsLoaded` como prop pra baixo, através do `<SQLiteProvider>`.
+  Como esses outros props nunca mudam entre renders, o `memo` bloqueia React de sempre re-montar
+  a árvore de `children` depois do primeiro render — travando `fontsLoaded` no valor que existia
+  no exato instante em que o provider montou (quase sempre `false`, já que fontes ainda não
+  tinham carregado), pra sempre. `pronto = fontsLoaded && !carregando` nunca virava `true`.
+- **Fix**: mover qualquer hook cujo valor mude ao longo do tempo (aqui, `useFonts()`) pra
+  **dentro** de um componente que já está dentro da árvore de `children` do `SQLiteProvider` (ver
+  `RootNavigator` em `src/app/_layout.tsx`) — nunca calculá-lo no componente que envolve o
+  provider e passar como prop pra baixo.
+- **Como aplicar**: mesma regra vale pra qualquer outro provider memoizado de terceiros (verificar
+  o código-fonte antes de assumir que `memo` compara tudo) — se um valor externo precisa refletir
+  mudança de estado ao longo do tempo, o hook que o produz tem que rodar dentro da árvore que o
+  consome, não fora dela.
+
+### `supabase.auth.getSession()` sem `.catch()` trava o app pra sempre em erro silencioso
+
+- **Sintoma**: mesmo device/teste acima — antes do fix do `memo` já existia esse segundo bug
+  empilhado: `AuthProvider` (`src/hooks/use-auth.tsx`) chamava `getSession().then(...)` sem
+  `.catch()`/`.finally()`. Se essa promise rejeitar (ex.: falha de leitura do `AsyncStorage` no
+  primeiro boot de uma build nova), `carregando` nunca vira `false` — tela em branco pra sempre,
+  sem exception visível em lugar nenhum porque é uma rejeição de promise não tratada.
+- **Fix**: sempre `.then(...).catch((erro) => console.error(...)).finally(() => setCarregando(false))`
+  em qualquer chamada assíncrona que controla um `pronto`/`loading` de bloqueio de tela — nunca só
+  `.then()`.
+
+### Colunas novas de sincronização (`atualizado_em`) ficam `NULL` em linhas antigas — quebra o push se a tabela remota for `NOT NULL`
+
+- **Sintoma**: primeiro sync real (2026-09-21) falhou com `null value in column "atualizado_em"
+  of relation "clientes" violates not-null constraint` — mensagem real, mostrada na aba Ajustes
+  (nunca escondida), não inferida.
+- **Causa raiz**: a migração que adicionou `uuid`/`atualizado_em`/`sincronizado_em`
+  (`src/db/schema.ts`) fazia backfill só do `uuid` (`src/db/migrate.ts`). Linhas criadas antes
+  dessa migração ficaram com `atualizado_em` local `NULL` — e a tabela remota no Supabase declara
+  essa coluna `NOT NULL`, então o `upsert` do `src/lib/sync.ts` falhava pra qualquer dado
+  pré-existente.
+- **Fix**: novo passo em `MIGRATIONS` (`schema.ts`) fazendo `UPDATE ... SET atualizado_em =
+  <carimbo de criação> WHERE atualizado_em IS NULL` nas 3 tabelas.
+- **Como aplicar**: toda vez que uma coluna `NOT NULL` remota corresponde a uma coluna local
+  adicionada via `ALTER TABLE` (que sempre entra `NULL` pra linhas existentes), o backfill
+  precisa cobrir *todas* as colunas novas usadas no payload remoto, não só as usadas pra
+  identidade (`uuid`).
 
 ### O app é dark-only de propósito, não uma lacuna
 

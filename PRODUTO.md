@@ -111,12 +111,13 @@ tempo dentro da sessão quanto médias/gráficos de evolução entre sessões.
 
 | Área | Hoje (MVP) | Versão completa prevista |
 |---|---|---|
-| Armazenamento | 100% local (SQLite) + sincronização por e-mail/senha como backup — código e migração remota (tabelas + RLS no Supabase) aplicados | Falta testar login e sincronização ponta a ponta em device. Merge de conflito multi-dispositivo fica pro gap abaixo |
-| Login | E-mail/senha via Supabase Auth, tela de login/cadastro protege o app (`src/app/(auth)/`) — backend pronto, ainda não testado em device físico | — |
+| Armazenamento | 100% local (SQLite) + sincronização por e-mail/senha como backup — testado ponta a ponta em device físico em 2026-09-21 (cadastro, login e sync confirmados, dados batendo nas 3 tabelas remotas) | Merge de conflito multi-dispositivo fica pro gap abaixo |
+| Login | E-mail/senha via Supabase Auth, tela de login/cadastro protege o app (`src/app/(auth)/`) — testado ponta a ponta em device físico | — |
 | Frequência cardíaca | Digitada manualmente num modal | "Integração automática com sensor Bluetooth" — já anunciada como texto de interface no modal de FC (`sessao/[id].tsx`), ainda não implementada |
 | Edição/exclusão de cliente, sessão ou leitura | Implementada; leitura pode ser editada durante a sessão e excluída também pelo prontuário | Falta validar os fluxos em device físico |
 | Transcrição de voz na nota de fechamento | Não existe | O protótipo visual tinha um botão de microfone; não implementado por não haver serviço de speech-to-text integrado ainda |
 | Multi-dispositivo | Não existe — dado mora só naquele celular | Depende da sincronização acima |
+| Versão web (PWA) | Builda e roda no navegador (testado), instalável — feita a pedido do usuário pra dar link de preview pro time, não como canal de distribuição principal | Deploy na Vercel pendente (projeto criado, primeiro build não disparado ainda) |
 
 ## Fora de escopo, por ora
 
