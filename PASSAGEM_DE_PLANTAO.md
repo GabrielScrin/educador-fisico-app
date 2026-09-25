@@ -1,4 +1,4 @@
-# Passagem de plantão — 2026-09-21 (teste ponta a ponta em device + build web/PWA)
+# Passagem de plantão — 2026-09-25 (deploy Vercel destravado + FC Bluetooth, voz e conflito de sync)
 
 Nota rápida pra mim mesmo (Claude) na próxima sessão. `ARQUITETURA.md` é a fonte permanente de
 verdade (estrutura de código, estado por feature, armadilhas técnicas) e `PRODUTO.md` é a visão
@@ -7,88 +7,96 @@ que valem ser lembradas antes de mexer de novo. Sempre confira os outros dois pr
 
 ## O que foi feito hoje
 
-Duas frentes bem distintas na mesma sessão.
+Sessão sem device físico conectado (ambiente remoto/nuvem) — três frentes de código integradas,
+mais o deploy web que já tinha ficado pendente da sessão anterior.
 
-**1. Teste ponta a ponta de login+sync em device físico** (fechando o que tinha ficado pendente
-da sessão de 2026-09-20) — reconectei o celular via `adb`, apliquei a migração remota (usuário
-restaurou o projeto Supabase pausado e rodou `remote_migration.sql` ele mesmo), gerei uma build
-de dev client nova via EAS (obrigatório: a sessão anterior tinha adicionado `expo-crypto` e
-`@react-native-async-storage/async-storage`, que são módulos nativos — não dá pra servir via
-Metro num dev client antigo que não tem esses módulos compilados). Encontrei e corrigi **3 bugs
-reais**, todos só visíveis rodando de verdade (nenhum pego por `tsc`/lint):
+**1. Deploy na Vercel — já tinha rolado, faltava só destravar o acesso.** O projeto
+`educador-fisico-app` (conta `gabrielscrins-projects`) já tinha 3 deployments de produção
+`READY` quando checamos via MCP — o usuário aparentemente disparou o deploy pelo dashboard depois
+da sessão anterior. O que faltava: **SSO Protection** ligado por padrão bloqueava qualquer pessoa
+sem login na conta Vercel de abrir os domínios `.vercel.app`. Tentei desativar via MCP
+(`update_project`) e recebi 403 (sem permissão) — o usuário desativou manualmente no dashboard
+(Settings → Deployment Protection). Deploy confirmado acessível.
 
-1. `SQLiteProvider` é memoizado ignorando `children` — `fontsLoaded` calculado em `RootLayout` e
-   passado como prop ficava congelado em `false` pra sempre. Fix: mover `useFonts()` pra dentro
-   de `RootNavigator` (dentro da árvore de children do provider). Detalhe completo em
-   `ARQUITETURA.md`.
-2. `supabase.auth.getSession()` sem `.catch()`/`.finally()` — uma rejeição silenciosa travava
-   `carregando` em `true` pra sempre, tela em branco sem erro visível.
-3. Linhas locais antigas (criadas antes da migração de sync) ficaram com `atualizado_em` NULL —
-   quebrava o push com `null value ... violates not-null constraint`. Fix: novo passo de
-   `MIGRATIONS` fazendo backfill.
+**2. FC via Bluetooth, transcrição de voz e aviso de conflito de sync — código integrado, NADA
+testado em device físico.** Detalhe técnico completo em `ARQUITETURA.md` (seções com data
+2026-09-25). Resumo:
+- **FC Bluetooth**: `react-native-ble-plx`, perfil BLE padrão "Heart Rate" (0x180D/0x2A37) —
+  funciona com qualquer monitor que anuncie esse serviço. UI integrada no modal de FC existente
+  em `sessao/[id].tsx`. Escondido de propósito na versão web (lib é só nativa).
+- **Transcrição de voz**: `expo-audio` grava, uma Edge Function nova no Supabase
+  (`transcrever-audio`) chama a API Whisper da OpenAI com a chave só no servidor. Botão de
+  microfone integrado no modal de Nota.
+- **Conflito de sync**: `sincronizarTudo()` agora detecta (comparando `atualizado_em` remoto
+  contra `sincronizado_em` local) quando um push está sobrescrevendo uma linha que foi editada em
+  outro aparelho entre dois syncs — continua sendo last-write-wins, mas agora avisa na aba
+  Ajustes em vez de sobrescrever em silêncio.
 
-Depois dos 3 fixes: cadastro de conta (`gabon_es@hotmail.com`), login, e sync confirmados
-rodando de verdade — conferi as 3 tabelas remotas via API depois do sync e os dados batem
-(1 cliente + 2 sessões + 3 leituras, `educador_id`/FKs corretos).
-
-**2. Build web/PWA**, a pedido do usuário, pra mandar link de preview pro time. `expo-sqlite` web
-é alpha e não tinha nenhuma configuração — 3 peças novas: `metro.config.js` (não existia; `.wasm`
-como asset + cabeçalhos COOP/COEP), `app.json` → `web.output: "single"` (não `"static"`, que
-quebrava com `window is not defined` porque o client do Supabase toca `window` na inicialização),
-e PWA de verdade (`public/manifest.json`, `public/sw.js`, `src/lib/pwa-web.ts` injetando as tags
-de `<head>` em runtime já que `+html.tsx` não roda no modo `"single"`). Tudo documentado com
-sintoma/causa/fix em `ARQUITETURA.md` → "Armadilhas conhecidas" → "`expo-sqlite` no target web".
+Validação feita nesta sessão (sem device): `tsc --noEmit`, `expo lint` (inclui regras do React
+Compiler), e `expo export --platform android` **e** `--platform web` (bundle completo, sem
+instalar em nada). Tudo passou limpo. Isso **não substitui teste real** — é só a garantia mínima
+de que compila e não quebra regra conhecida (mesma régua do resto do projeto).
 
 ## O que NÃO foi feito / ficou pendente
 
-- **Deploy na Vercel não terminou.** Não havia projeto Vercel conectado a este repo (nem na conta
-  MCP, nem webhook no GitHub, nem `.vercel/` local) — o usuário escolheu conectar pelo dashboard
-  (Import Git Repository) em vez de eu fazer via CLI/API. `vercel.json` já está no repo (build
-  command, output directory, headers COOP/COEP, rewrite de SPA). O usuário importou o projeto
-  (`educador-fisico-app`, existe agora na conta `gabrielscrin's projects`), mas **nenhum deploy
-  foi disparado** (`latestDeployment: null`, domínio dá 404 DEPLOYMENT_NOT_FOUND) — o import
-  criou o projeto mas não iniciou build nenhum. Não confirmei se a conexão Git de fato completou
-  (`get_project` não mostrou nenhum campo de `link`/`gitRepository`, o que é suspeito). Pedi pro
-  usuário conferir Settings → Git nesse projeto e ver se o repo aparece conectado de verdade.
-- **As ferramentas MCP da Vercel para criar projeto/deploy têm bug nesta sessão**: `create_project`
-  sempre retorna `"missing required property name"` mesmo passando `name` corretamente, de
-  várias formas testadas. Descobri o motivo no meio do caminho: o parâmetro real é `requestBody`
-  (um objeto aninhado, não campos soltos no top-level) — mas mesmo passando dessa forma pro
-  `create_deployment`, a chamada continuou falhando (`"expected object, received string"`,
-  mesmo passando um objeto de verdade). **Não fica claro se é limitação da forma como estou
-  invocando a tool ou bug real do lado do servidor MCP** — não gastar muito tempo nisso de novo
-  sem antes confirmar se foi corrigido; o caminho confiável é o dashboard/CLI, não essa tool.
-- **Nada foi commitado até o usuário perguntar diretamente** ("vc fez o comit e push das
-  alterações?") — só commitei depois disso. Sempre commitar/documentar antes de considerar uma
-  etapa "pronta", não deixar acumular.
+- **Nenhuma das 3 features novas foi testada em device físico.** BLE e áudio são módulos
+  nativos — o dev client atual não tem eles compilados, precisa gerar uma build EAS nova antes de
+  conseguir testar (mesmo motivo que já apareceu nas sessões de login/sync). Sem isso, "código
+  integrado" não é "funciona de verdade" — não afirmar que está pronto até rodar num aparelho
+  real.
+- **`OPENAI_API_KEY` nunca foi criada nem configurada.** A Edge Function `transcrever-audio`
+  existe no repo mas **não foi deployada** (`supabase functions deploy transcrever-audio`) nem
+  tem a secret configurada (`supabase secrets set OPENAI_API_KEY=sk-...`). Sem os dois passos, a
+  transcrição sempre vai falhar com erro 500. Isso precisa de uma chave de API real da OpenAI, que
+  eu não tenho e não devo pedir por chat — o usuário configura direto no ambiente dele (CLI ou
+  dashboard do Supabase).
+- **Editar/excluir cliente/sessão/leitura em device físico** — continua pendente de sessões
+  anteriores, não tocado hoje.
+- **Merge de campo a campo no sync multi-dispositivo** — decisão explícita de não fazer agora
+  (o usuário escolheu "LWW com aviso visível" em vez de merge completo, ver pergunta feita no
+  início da sessão). Só reconsiderar se o usuário pedir de novo.
+- **`docs.expo.dev` estava bloqueado pela política de rede deste ambiente** (sessão na nuvem).
+  Consegui confirmar as APIs reais de `expo-audio` e do plugin do `react-native-ble-plx` mesmo
+  assim, via `raw.githubusercontent.com/expo/expo` (mesmo `.mdx` que gera a doc oficial) e via
+  tarball do npm (`registry.npmjs.org`) — técnica documentada em `ARQUITETURA.md` →
+  "Armadilhas conhecidas" → "`docs.expo.dev` pode estar bloqueado...". Não preciso mais pedir pro
+  usuário liberar rede se isso acontecer de novo.
 
 ## Decisões e o porquê
 
-- **`web.output: "single"` (SPA), não `"static"` (SSG)** — não é só workaround do bug do
-  `window`, é a escolha certa pra este app de qualquer forma: é uma ferramenta autenticada, não
-  um site de conteúdo que se beneficia de pré-renderização por rota pra SEO.
-- **Service worker simples, sem prometer offline completo** — só cacheia o shell da app
-  (stale-while-revalidate) pra abrir mais rápido e ser instalável. SQLite via wasm e sync
-  continuam precisando de rede pra funcionar de verdade; documentado assim no próprio código e
-  aqui, pra não prometer mais do que existe (mesma régua que já vale pro resto do produto).
-- **Usuário preferiu conectar a Vercel pelo dashboard, não por mim via CLI/API** — deploy
-  automático a cada push, sem precisar de login recorrente numa ferramenta que só eu uso.
+- **FC Bluetooth não grava cada notificação BLE sozinha no banco** — o educador continua
+  decidindo quando registrar (toque explícito em "usar bpm ao vivo"), igual às outras escalas.
+  Consistente com o resto do produto (nenhuma leitura é automática/contínua).
+- **Transcrição de voz via Edge Function, não direto do app pra OpenAI** — a chave da API nunca
+  pode entrar no bundle (qualquer `EXPO_PUBLIC_*` é pública). A Edge Function do Supabase já
+  existe como conceito no projeto (auth/sync), reusar a mesma infra em vez de introduzir um
+  backend novo.
+- **Whisper (`whisper-1`), não `gpt-4o-transcribe`** — o usuário pediu especificamente "OpenAI
+  Whisper API" na pergunta feita no início da sessão; `whisper-1` ainda é um modelo válido da API
+  (confirmado no OpenAPI spec oficial da OpenAI). Trocar pra `gpt-4o-transcribe` é uma troca de
+  uma linha na Edge Function, se quiser qualidade maior depois.
+- **Sync: aviso de conflito, não merge de campo a campo** — escolha do usuário, ver pergunta no
+  início da sessão. Mantém a lógica simples e testável.
 
 ## O que falta (ordem que o usuário pediu, dos gaps do MVP)
 
-1. ~~Sincronização~~ — testado ponta a ponta, funcionando.
+1. ~~Sincronização~~ — testado ponta a ponta, funcionando. Aviso de conflito adicionado hoje
+   (código, não testado com 2 aparelhos reais).
 2. ~~Login~~ — testado ponta a ponta, funcionando.
-3. **FC via Bluetooth** — ainda não iniciado (pausado pra entrar o pedido de build web).
-4. ~~Editar/excluir cliente, sessão ou leitura~~ — código integrado numa sessão anterior
-   (2026-09-15), ainda não testado especificamente em device (o teste desta sessão focou
-   login/sync).
-5. Transcrição de voz na nota.
-6. Multi-dispositivo (depende do sync, que já está rodando — falta resolver merge de conflito).
+3. **FC via Bluetooth** — código integrado hoje, **falta testar em device físico** (build EAS
+   nova + monitor BLE real).
+4. **Editar/excluir cliente, sessão ou leitura** — código integrado numa sessão anterior
+   (2026-09-15), ainda não testado especificamente em device físico.
+5. **Transcrição de voz na nota** — código integrado hoje, **falta**: configurar
+   `OPENAI_API_KEY`, deployar a Edge Function, testar em device físico (build EAS nova).
+6. **Multi-dispositivo** — sync roda e agora avisa de conflito; falta testar com 2 aparelhos
+   físicos de verdade.
 
-Fora da lista de gaps do MVP: **destravar o deploy web na Vercel** é o item mais imediato — ver
-seção acima.
+Fora da lista de gaps do MVP: **deploy web na Vercel** — resolvido hoje (deploy ativo, SSO
+Protection desativado pelo usuário).
 
 ## Ver também
 
-`ARQUITETURA.md` (técnico — seções "Autenticação e sincronização" e "Web/PWA", mais as 4
-armadilhas novas desta sessão), `PRODUTO.md` (produto/fluxo completo, tabela de gaps).
+`ARQUITETURA.md` (técnico — seções "FC via Bluetooth", "Transcrição de voz na nota",
+"Multi-dispositivo — aviso de conflito de sync", mais as 2 armadilhas novas desta sessão),
+`PRODUTO.md` (produto/fluxo completo, tabela de gaps atualizada).
