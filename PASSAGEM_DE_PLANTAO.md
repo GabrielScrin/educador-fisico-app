@@ -44,12 +44,24 @@ de que compila e não quebra regra conhecida (mesma régua do resto do projeto).
   conseguir testar (mesmo motivo que já apareceu nas sessões de login/sync). Sem isso, "código
   integrado" não é "funciona de verdade" — não afirmar que está pronto até rodar num aparelho
   real.
-- **`OPENAI_API_KEY` nunca foi criada nem configurada.** A Edge Function `transcrever-audio`
-  existe no repo mas **não foi deployada** (`supabase functions deploy transcrever-audio`) nem
-  tem a secret configurada (`supabase secrets set OPENAI_API_KEY=sk-...`). Sem os dois passos, a
-  transcrição sempre vai falhar com erro 500. Isso precisa de uma chave de API real da OpenAI, que
-  eu não tenho e não devo pedir por chat — o usuário configura direto no ambiente dele (CLI ou
-  dashboard do Supabase).
+- **`OPENAI_API_KEY` nunca foi criada nem configurada — e não dá pra fazer isso por esta
+  sessão.** A Edge Function `transcrever-audio` existe no repo mas **não foi deployada**
+  (`supabase functions deploy transcrever-audio`) nem tem a secret configurada (`supabase secrets
+  set OPENAI_API_KEY=sk-...`). Sem os dois passos, a transcrição sempre vai falhar com erro 500.
+  Duas descobertas desta sessão, importantes pra próxima:
+  1. O usuário colou uma chave real da OpenAI direto no chat. **Não usei essa chave em nenhum
+     comando/arquivo** (nunca foi escrita no repo, nunca chamei nada com ela) — só orientei o
+     usuário a revogá-la no dashboard da OpenAI e gerar outra, porque uma chave que passa por
+     texto de chat não deve seguir pra produção. Se aparecer outra chave colada em texto puro
+     numa sessão futura, mesma régua: não gravar em arquivo, não ecoar de volta, recomendar
+     rotação.
+  2. O conector MCP do Supabase disponível nesta sessão **não é o projeto do app**
+     (`apyfxpegxjfgznmfvqzq`) — é uma organização/conta diferente (projetos vistos via MCP:
+     `cr8`, `CR8 - New`, `WeCRM`, `Sheets 8 Engage`). E o MCP do Supabase, de qualquer forma, não
+     tem nenhuma tool pra configurar secret de Edge Function (só migração/deploy/queries). A CLI
+     também não está instalada neste ambiente remoto (`supabase: command not found`). Ou seja:
+     **configurar a secret e deployar a function só é possível na máquina do usuário**, onde o
+     projeto já está linkado (sessão de setup anterior) — não tem caminho por aqui.
 - **Editar/excluir cliente/sessão/leitura em device físico** — continua pendente de sessões
   anteriores, não tocado hoje.
 - **Merge de campo a campo no sync multi-dispositivo** — decisão explícita de não fazer agora

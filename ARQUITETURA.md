@@ -237,6 +237,18 @@ pública).
   2. **Deploy da function** — `supabase functions deploy transcrever-audio` (ainda não deployada).
   3. Build EAS nova (mesmo motivo do BLE — `expo-audio` grava via módulo nativo) e teste em device
      físico com custo real de API.
+- **Só dá pra fazer os passos 1 e 2 na máquina do usuário, não por uma sessão remota como esta.**
+  Confirmado em 2026-09-25: o conector MCP do Supabase disponível numa sessão na nuvem pode
+  apontar pra uma organização/conta diferente da do projeto do app (aqui, viu só projetos de
+  outra conta — nenhum `apyfxpegxjfgznmfvqzq`), e mesmo quando aponta pro projeto certo, o MCP do
+  Supabase não expõe nenhuma tool pra gerenciar secrets de Edge Function (só
+  migração/deploy/queries/branches). A CLI (`supabase`) também não vem instalada por padrão num
+  ambiente remoto novo. Ou seja: pedir a secret/chave de API por chat numa sessão assim não leva a
+  nada — o caminho certo é sempre orientar o usuário a rodar `supabase secrets set`/`supabase
+  functions deploy` (ou o dashboard) na própria máquina dele, onde o projeto já está linkado.
+  Se uma chave de API real vier colada em texto puro no chat: nunca escrever em arquivo do repo,
+  nunca ecoar de volta, nunca passar por um comando Bash — só orientar a pessoa a revogá-la e
+  gerar outra pra usar fora do chat.
 
 ## Multi-dispositivo — aviso de conflito de sync (2026-09-25)
 
