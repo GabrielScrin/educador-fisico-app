@@ -12,7 +12,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { SQLiteProvider } from 'expo-sqlite';
 import { useEffect } from 'react';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 import { applyMigrations } from '@/db/migrate';
@@ -92,19 +92,40 @@ function RootNavigator() {
   if (!pronto) return null;
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Protected guard={!!session}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="cliente/novo" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="cliente/[id]" />
-        <Stack.Screen name="cliente/[id]/editar" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="sessao/[id]" options={{ gestureEnabled: false }} />
-        <Stack.Screen name="sessao/[id]/resumo" options={{ gestureEnabled: false }} />
-        <Stack.Screen name="escalas" options={{ presentation: 'modal' }} />
-      </Stack.Protected>
-      <Stack.Protected guard={!session}>
-        <Stack.Screen name="(auth)" />
-      </Stack.Protected>
-    </Stack>
+    // Telas foram desenhadas edge-to-edge pro tamanho de um celular. Na web isso esticava cada
+    // tela pra largura inteira da janela do desktop, ficando distorcido (campos e botões gigantes
+    // numa tela larga) — aqui limitamos a área do app a uma coluna do tamanho de um celular e
+    // centralizamos, com um fundo escuro preenchendo o resto da largura (senão apareceria o branco
+    // padrão do <body>, que nenhuma tela deste app dark-only usa). Sem efeito nativo (o `maxWidth`
+    // nunca é atingido na largura real de um celular).
+    <View style={styles.fundoWeb}>
+      <View style={styles.telaWeb}>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Protected guard={!!session}>
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="cliente/novo" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="cliente/[id]" />
+            <Stack.Screen name="cliente/[id]/editar" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="sessao/[id]" options={{ gestureEnabled: false }} />
+            <Stack.Screen name="sessao/[id]/resumo" options={{ gestureEnabled: false }} />
+            <Stack.Screen name="escalas" options={{ presentation: 'modal' }} />
+          </Stack.Protected>
+          <Stack.Protected guard={!session}>
+            <Stack.Screen name="(auth)" />
+          </Stack.Protected>
+        </Stack>
+      </View>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  fundoWeb: Platform.select({
+    web: { flex: 1, width: '100%', backgroundColor: Colors.dark.background },
+    default: { flex: 1 },
+  }),
+  telaWeb: Platform.select({
+    web: { flex: 1, width: '100%', maxWidth: 480, alignSelf: 'center' },
+    default: { flex: 1 },
+  }),
+});

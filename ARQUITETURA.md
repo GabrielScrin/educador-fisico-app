@@ -258,6 +258,28 @@ mostrado como aviso na aba Ajustes (nunca silencioso). Não testado com dois apa
 
 ## Armadilhas conhecidas
 
+### Telas web esticando full-bleed numa janela larga de desktop ("distorcido")
+
+- **Sintoma**: reportado pelo usuário em produção — na versão web (Vercel), qualquer tela (login,
+  Clientes, etc.) esticava pra largura inteira da janela do navegador, com campos de busca, cards e
+  botões gigantes numa tela de desktop larga.
+- **Causa raiz**: toda tela do app é desenhada edge-to-edge (sem `maxWidth`, tudo `flex: 1`/`100%`)
+  porque o app é feito pra rodar num celular — correto pra native, mas sem nenhum limite de largura
+  a mesma tela ocupa o viewport inteiro do navegador num monitor.
+- **Fix**: `src/app/_layout.tsx` agora envolve o `<Stack>` inteiro (dentro de `RootNavigator`) numa
+  `View` que, só na web (`Platform.select`), limita a `maxWidth: 480` e centraliza
+  (`alignSelf: 'center'`), dentro de outra `View` de fundo escuro (`Colors.dark.background`) que
+  preenche a largura toda — sem isso apareceria o branco padrão do `<body>` nas laterais. Um único
+  ponto de mudança cobre todas as telas (login, tabs, modais roteados) porque todas passam pelo
+  mesmo `Stack`; `Modal` nativo (FC, Nota) não é afetado porque escapa via portal pro `<body>` na
+  web, fora dessa árvore. Zero efeito nativo — `maxWidth: 480` nunca é atingido na largura real de
+  um celular.
+- **Como testar sem mexer em dado real**: pra reproduzir telas autenticadas sem usar a conta real
+  do usuário, criar um usuário descartável já confirmado via Admin API do Supabase
+  (`POST .../auth/v1/admin/users` com `email_confirm: true`, usando `SUPABASE_SECRET_KEY` do
+  `.env`) — evita o passo de confirmação de e-mail que bloqueia `signUp` normal. Sempre deletar o
+  usuário de teste depois (`DELETE .../auth/v1/admin/users/<id>`).
+
 ### `docs.expo.dev` pode estar bloqueado no ambiente de execução — GitHub raw/npm registry como alternativa
 
 - **Contexto**: o `AGENTS.md` pede pra sempre confirmar contra a doc exata da versão do Expo antes
