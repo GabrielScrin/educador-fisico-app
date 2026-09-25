@@ -92,7 +92,7 @@ telas por cima do grupo de abas, escondendo a tab bar automaticamente.
 | Build web / PWA | ✅ | Renderiza e builda certo, instalável (manifest + service worker), **em deploy ativo na Vercel** (`educador-fisico-app.vercel.app`, deploy automático a cada push) |
 | FC via Bluetooth | 🟡 | Código integrado (`react-native-ble-plx`, perfil BLE padrão "Heart Rate" 0x180D) — **não testado em device físico**, exige build EAS nova (módulo nativo) |
 | Editar/excluir cliente, sessão ou leitura | ✅ | Cliente: editar/excluir; sessão: editar nota/excluir; leitura: editar durante sessão e excluir |
-| Transcrição de voz na nota | 🟡 | Código integrado (`expo-audio` + Whisper via Edge Function no Supabase) — **não testado em device físico**, exige `OPENAI_API_KEY` configurada como secret do projeto e build EAS nova (módulo nativo) |
+| Transcrição de voz na nota | 🟡 | Código integrado (`expo-audio` + Gemini via Edge Function no Supabase) — **não testado em device físico**, exige `GEMINI_API_KEY` configurada como secret do projeto e build EAS nova (módulo nativo) |
 | Multi-dispositivo (2º aparelho do mesmo educador) | 🟡 | Sync continua last-write-wins (sem merge de campo), mas agora detecta e avisa (aba Ajustes) quando um push sobrescreveu uma linha editada em outro aparelho entre dois syncs |
 
 _Atualizado na sessão de 2026-09-25 (deploy Vercel destravado, FC via Bluetooth, transcrição de voz e aviso de conflito de sync — código integrado, device físico pendente; ver seções abaixo)._ Sessões anteriores: 2026-09-21 (login+sync testados ponta a ponta em device físico, 3 bugs reais corrigidos, build web/PWA nova), 2026-09-20 (login+sync, código), 2026-09-15 (CRUD), 2026-09-10 (reskin "Clinical High-Contrast Dark" + navegação em abas).
@@ -212,17 +212,23 @@ genéricas), sem código específico de marca.
 
 ## Transcrição de voz na nota (2026-09-25, código integrado — não testado em device físico)
 
-Grava áudio local (`expo-audio`) e manda pra transcrição via **Whisper (OpenAI)**, chamado de uma
-Edge Function no Supabase — a chave da API (`OPENAI_API_KEY`) nunca entra no bundle do app
-(diferença importante de qualquer variável `EXPO_PUBLIC_*`, que é embutida no bundle e portanto
-pública).
+Grava áudio local (`expo-audio`) e manda pra transcrição via **Gemini** (Google AI Studio, tier
+gratuito), chamado de uma Edge Function no Supabase — a chave da API (`GEMINI_API_KEY`) nunca
+entra no bundle do app (diferença importante de qualquer variável `EXPO_PUBLIC_*`, que é embutida
+no bundle e portanto pública). Trocado de Whisper (OpenAI) pra Gemini na sessão de 2026-09-25 —
+decisão do usuário, tier gratuito do Gemini cobre o volume esperado (nota de voz avulsa, não uso
+em massa).
 
 - `supabase/functions/transcrever-audio/index.ts` — recebe `multipart/form-data` (campo
-  `audio`), encaminha pra `POST https://api.openai.com/v1/audio/transcriptions` (`model:
-  "whisper-1"`, `language: "pt"`) usando a secret do servidor, devolve `{ texto }`. A verificação
-  de JWT do Supabase (`verify_jwt`, ligada por padrão — não desligada em `config.toml`) já garante
-  que só um educador logado consegue chamar essa função; não há checagem de auth manual no código
-  da function de propósito.
+  `audio`), converte pra base64 e encaminha pra `POST
+  https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent`
+  (áudio como `inline_data`, mime `audio/mp4` — container real de um `.m4a`) usando a secret do
+  servidor, devolve `{ texto }`. `gemini-flash-latest` é um alias estável (não uma versão pontual
+  tipo `gemini-2.0-flash`, que a Google já descontinuou uma vez neste projeto) — resolve pro Flash
+  mais recente disponível na conta, hoje `gemini-3.8-flash`. A verificação de JWT do Supabase
+  (`verify_jwt`, ligada por padrão — não desligada em `config.toml`) já garante que só um educador
+  logado consegue chamar essa função; não há checagem de auth manual no código da function de
+  propósito.
 - `src/lib/transcricao.ts` — monta o `FormData` com o arquivo local (padrão do React Native: um
   objeto `{ uri, name, type }` no lugar de um `Blob` de verdade, porque não existe filesystem de
   Blob em RN) e chama `supabase.functions.invoke('transcrever-audio', { body: formData })` — o
@@ -232,8 +238,8 @@ pública).
   existente (nunca substitui o que já tinha sido escrito).
 - **Config plugin** (`app.json` → `plugins`): `["expo-audio", { microphonePermission: "..." }]`.
 - **Pendente antes de considerar pronto**:
-  1. **Configurar a secret no Supabase** — `supabase secrets set OPENAI_API_KEY=sk-...` (nenhuma
-     chave foi criada nem configurada nesta sessão; sem isso a function responde erro 500).
+  1. **Configurar a secret no Supabase** — `supabase secrets set GEMINI_API_KEY=...` (chave do
+     Google AI Studio, tier gratuito; sem isso a function responde erro 500).
   2. **Deploy da function** — `supabase functions deploy transcrever-audio` (ainda não deployada).
   3. Build EAS nova (mesmo motivo do BLE — `expo-audio` grava via módulo nativo) e teste em device
      físico com custo real de API.
@@ -267,6 +273,22 @@ mostrado como aviso na aba Ajustes (nunca silencioso). Não testado com dois apa
   compilado direto, que é o que de fato roda.
 - **Como aplicar**: se uma tentativa de acessar `docs.expo.dev` falhar com erro de rede/proxy,
   tentar essas duas alternativas antes de desistir de confirmar contra a doc real.
+
+### `SUPABASE_ACCESS_TOKEN` de sandbox conflita com a sessão de `supabase login` já salva na máquina
+
+- **Sintoma**: `npx supabase projects list` (ou qualquer comando do CLI) retorna uma lista de
+  projetos que não inclui o projeto real do app (`apyfxpegxjfgznmfvqzq`, "arcoalianca's Project"),
+  mesmo já tendo rodado `supabase login` nesta máquina antes.
+- **Causa raiz**: o ambiente de execução do terminal exporta uma env var `SUPABASE_ACCESS_TOKEN`
+  própria (de outra conta/sandbox), e o CLI sempre prioriza essa env var sobre a sessão salva por
+  `supabase login` (armazenada fora de env var, no keychain do SO). A env var "vence" em silêncio
+  — não tem aviso de qual token está sendo usado.
+- **Fix**: prefixar o comando com `env -u SUPABASE_ACCESS_TOKEN` pra forçar o CLI a cair pra sessão
+  logada localmente. Ex.: `env -u SUPABASE_ACCESS_TOKEN npx supabase secrets set CHAVE=valor
+  --project-ref apyfxpegxjfgznmfvqzq`.
+- **Outra pegadinha relacionada**: mesmo com a sessão certa, `supabase link` nesse projeto retorna
+  403 ("não tem privilégios") — mas `secrets list/set` e `functions deploy` funcionam normalmente
+  passando `--project-ref` direto, sem precisar de `link`. Não perder tempo tentando linkar.
 
 ### Efeito que sincroniza estado automaticamente (`useEffect` + `setState`) é proibido pelo React Compiler
 

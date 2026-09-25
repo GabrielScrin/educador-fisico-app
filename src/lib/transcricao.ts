@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase';
 
 // Manda o áudio gravado (uri local do arquivo) pra Edge Function `transcrever-audio`, que chama a
-// API Whisper da OpenAI no servidor — a chave OPENAI_API_KEY nunca entra no bundle do app.
+// API do Gemini no servidor — a chave GEMINI_API_KEY nunca entra no bundle do app.
 export async function transcreverAudio(uri: string): Promise<string> {
   const nomeArquivo = uri.split('/').pop() ?? 'nota.m4a';
   const formData = new FormData();

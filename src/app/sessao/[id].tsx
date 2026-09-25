@@ -165,7 +165,7 @@ export default function SessaoAoVivo() {
     setNotaAberta(false);
   }
 
-  // Transcrição de voz na nota (Whisper via Edge Function, ver src/lib/transcricao.ts). Não
+  // Transcrição de voz na nota (Gemini via Edge Function, ver src/lib/transcricao.ts). Não
   // testado em device físico ainda — expo-audio exige módulo nativo, mesma build EAS pendente
   // do BLE (ver PASSAGEM_DE_PLANTAO.md).
   async function iniciarGravacaoNota() {
