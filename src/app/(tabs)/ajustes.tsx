@@ -17,7 +17,7 @@ export default function Ajustes() {
   const theme = useTheme();
   const versao = Constants.expoConfig?.version ?? '—';
   const { session } = useAuth();
-  const { estado, ultimaSincronizacao, erro, sincronizarAgora } = useSync();
+  const { estado, ultimaSincronizacao, erro, conflitos, sincronizarAgora } = useSync();
 
   function sair() {
     Alert.alert('Sair da conta', 'Seus dados continuam salvos neste aparelho.', [
@@ -92,6 +92,16 @@ export default function Ajustes() {
                 </ThemedText>
               )}
             </Pressable>
+            {conflitos > 0 && (
+              <View style={[styles.avisoConflito, { backgroundColor: theme.backgroundSelected }]}>
+                <MaterialSymbol name="warning" size={18} color={theme.danger} />
+                <ThemedText type="small" themeColor="textSecondary" style={{ flex: 1 }}>
+                  {conflitos === 1
+                    ? '1 registro foi sobrescrito nesta sincronização — havia sido alterado em outro aparelho antes de chegar aqui.'
+                    : `${conflitos} registros foram sobrescritos nesta sincronização — haviam sido alterados em outro aparelho antes de chegar aqui.`}
+                </ThemedText>
+              </View>
+            )}
           </Secao>
 
           <Secao titulo="Referência clínica">
@@ -186,4 +196,10 @@ const styles = StyleSheet.create({
   linhaClicavel: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, padding: Spacing.three },
   icone: { width: 36, height: 36, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
   fonteCard: { padding: Spacing.three, paddingTop: 0 },
+  avisoConflito: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.two,
+    padding: Spacing.three,
+  },
 });

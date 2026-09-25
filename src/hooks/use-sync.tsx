@@ -11,6 +11,7 @@ type SyncState = {
   estado: EstadoSync;
   ultimaSincronizacao: Date | null;
   erro: string | null;
+  conflitos: number;
   sincronizarAgora: () => void;
 };
 
@@ -18,6 +19,7 @@ const SyncContext = createContext<SyncState>({
   estado: 'ocioso',
   ultimaSincronizacao: null,
   erro: null,
+  conflitos: 0,
   sincronizarAgora: () => {},
 });
 
@@ -30,6 +32,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [estado, setEstado] = useState<EstadoSync>('ocioso');
   const [ultimaSincronizacao, setUltimaSincronizacao] = useState<Date | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [conflitos, setConflitos] = useState(0);
   const emAndamento = useRef(false);
 
   const sincronizarAgora = useCallback(() => {
@@ -38,8 +41,9 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     setEstado('sincronizando');
     setErro(null);
     sincronizarTudo(db)
-      .then(() => {
+      .then((resultado) => {
         setUltimaSincronizacao(new Date());
+        setConflitos(resultado.conflitos);
         setEstado('ocioso');
       })
       .catch((e: Error) => {
@@ -64,7 +68,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   }, [session, sincronizarAgora]);
 
   return (
-    <SyncContext.Provider value={{ estado, ultimaSincronizacao, erro, sincronizarAgora }}>
+    <SyncContext.Provider value={{ estado, ultimaSincronizacao, erro, conflitos, sincronizarAgora }}>
       {children}
     </SyncContext.Provider>
   );

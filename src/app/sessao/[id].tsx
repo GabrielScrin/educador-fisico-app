@@ -1,5 +1,22 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
+import {
+  AudioModule,
+  RecordingPresets,
+  setAudioModeAsync,
+  useAudioRecorder,
+  useAudioRecorderState,
+} from 'expo-audio';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -25,7 +42,9 @@ import {
   type Sessao,
 } from '@/db/queries';
 import { formatarDuracao, useCountUpTimer, useElapsedSeconds } from '@/hooks/use-elapsed-timer';
+import { useMonitorFrequenciaCardiaca } from '@/hooks/use-heart-rate-monitor';
 import { useTheme } from '@/hooks/use-theme';
+import { transcreverAudio } from '@/lib/transcricao';
 
 const ICONE_TIPO: Record<Leitura['tipo'], string> = {
   borg: 'directions_run',
@@ -60,6 +79,11 @@ export default function SessaoAoVivo() {
   const [notaAberta, setNotaAberta] = useState(false);
   const [nota, setNota] = useState('');
   const [leituraEditando, setLeituraEditando] = useState<Leitura | null>(null);
+  const monitorFc = useMonitorFrequenciaCardiaca();
+  const gravadorNota = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const estadoGravadorNota = useAudioRecorderState(gravadorNota);
+  const [transcrevendo, setTranscrevendo] = useState(false);
+  const [erroTranscricao, setErroTranscricao] = useState<string | null>(null);
 
   const tempoTotal = useElapsedSeconds(sessao?.iniciada_em ?? null);
   const { segundos: intervalo, zerar: zerarIntervalo } = useCountUpTimer();
@@ -79,6 +103,7 @@ export default function SessaoAoVivo() {
   function atualizarLeituras() {
     listarLeituras(db, sessaoId).then(setLeituras);
   }
+
 
   async function registrar(tipo: TipoEscala, valor: number) {
     if (leituraEditando) {
@@ -132,6 +157,42 @@ export default function SessaoAoVivo() {
   async function salvarNota() {
     await atualizarNotaSessao(db, sessaoId, nota);
     setNotaAberta(false);
+  }
+
+  function fecharNota() {
+    if (estadoGravadorNota.isRecording) gravadorNota.stop().catch(() => {});
+    setErroTranscricao(null);
+    setNotaAberta(false);
+  }
+
+  // Transcrição de voz na nota (Whisper via Edge Function, ver src/lib/transcricao.ts). Não
+  // testado em device físico ainda — expo-audio exige módulo nativo, mesma build EAS pendente
+  // do BLE (ver PASSAGEM_DE_PLANTAO.md).
+  async function iniciarGravacaoNota() {
+    setErroTranscricao(null);
+    const permissao = await AudioModule.requestRecordingPermissionsAsync();
+    if (!permissao.granted) {
+      setErroTranscricao('Permissão de microfone negada.');
+      return;
+    }
+    await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
+    await gravadorNota.prepareToRecordAsync();
+    gravadorNota.record();
+  }
+
+  async function pararGravacaoNota() {
+    await gravadorNota.stop();
+    const uri = gravadorNota.uri;
+    if (!uri) return;
+    setTranscrevendo(true);
+    try {
+      const texto = await transcreverAudio(uri);
+      if (texto) setNota((atual) => (atual.trim() ? `${atual.trim()}\n${texto}` : texto));
+    } catch (e) {
+      setErroTranscricao(e instanceof Error ? e.message : 'Falha ao transcrever o áudio.');
+    } finally {
+      setTranscrevendo(false);
+    }
   }
 
   const leiturasRecentes = useMemo(() => leituras.slice().reverse(), [leituras]);
@@ -425,9 +486,98 @@ export default function SessaoAoVivo() {
               {leituraEditando ? 'Editar frequência cardíaca' : 'Frequência cardíaca'}
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              Digite o bpm {leituraEditando ? 'corrigido' : 'atual'} (integração automática com sensor
-              Bluetooth vem numa próxima versão).
+              Digite o bpm {leituraEditando ? 'corrigido' : 'atual'}
+              {!leituraEditando && Platform.OS !== 'web'
+                ? ', ou conecte um monitor Bluetooth abaixo.'
+                : '.'}
             </ThemedText>
+
+            {!leituraEditando && Platform.OS !== 'web' && (
+              <View style={[styles.blocoBluetooth, { backgroundColor: theme.backgroundSelected }]}>
+                {monitorFc.estado === 'desconectado' && (
+                  <Pressable onPress={monitorFc.iniciarScan} style={styles.itemDispositivo}>
+                    <MaterialSymbol name="bluetooth_searching" size={16} color={theme.accent} />
+                    <ThemedText type="small" style={{ color: theme.accent, flex: 1 }}>
+                      Conectar monitor Bluetooth
+                    </ThemedText>
+                  </Pressable>
+                )}
+
+                {monitorFc.estado === 'procurando' && (
+                  <>
+                    <View style={styles.itemDispositivo}>
+                      <MaterialSymbol name="bluetooth_searching" size={16} color={theme.textSecondary} />
+                      <ThemedText type="small" themeColor="textSecondary" style={{ flex: 1 }}>
+                        Procurando monitores próximos...
+                      </ThemedText>
+                      <Pressable onPress={monitorFc.pararScan}>
+                        <ThemedText type="small" themeColor="textMuted">
+                          Cancelar
+                        </ThemedText>
+                      </Pressable>
+                    </View>
+                    {monitorFc.dispositivos.map((dispositivo) => (
+                      <Pressable
+                        key={dispositivo.id}
+                        onPress={() => monitorFc.conectar(dispositivo)}
+                        style={styles.itemDispositivo}
+                      >
+                        <MaterialSymbol name="bluetooth" size={16} color={theme.accent} />
+                        <ThemedText type="small" style={{ flex: 1 }}>
+                          {dispositivo.name ?? dispositivo.id}
+                        </ThemedText>
+                      </Pressable>
+                    ))}
+                  </>
+                )}
+
+                {monitorFc.estado === 'conectando' && (
+                  <View style={styles.itemDispositivo}>
+                    <MaterialSymbol name="bluetooth_searching" size={16} color={theme.textSecondary} />
+                    <ThemedText type="small" themeColor="textSecondary">
+                      Conectando...
+                    </ThemedText>
+                  </View>
+                )}
+
+                {monitorFc.estado === 'conectado' && (
+                  <>
+                    <Pressable
+                      onPress={() => monitorFc.bpm != null && setFcValor(String(monitorFc.bpm))}
+                      disabled={monitorFc.bpm == null}
+                      style={styles.itemDispositivo}
+                    >
+                      <MaterialSymbol name="bluetooth_connected" size={16} color={theme.danger} />
+                      <ThemedText type="small" themeColor="textSecondary" style={{ flex: 1 }}>
+                        {monitorFc.bpm != null
+                          ? `Monitor conectado — toque para usar ${monitorFc.bpm} bpm`
+                          : 'Monitor conectado — aguardando leitura...'}
+                      </ThemedText>
+                    </Pressable>
+                    <Pressable onPress={monitorFc.desconectar} style={styles.itemDispositivo}>
+                      <ThemedText type="small" style={{ color: theme.danger }}>
+                        Desconectar
+                      </ThemedText>
+                    </Pressable>
+                  </>
+                )}
+
+                {monitorFc.estado === 'erro' && (
+                  <View style={styles.itemDispositivo}>
+                    <MaterialSymbol name="bluetooth_disabled" size={16} color={theme.danger} />
+                    <ThemedText type="small" style={{ color: theme.danger, flex: 1 }}>
+                      {monitorFc.erro ?? 'Falha no Bluetooth.'}
+                    </ThemedText>
+                    <Pressable onPress={monitorFc.iniciarScan}>
+                      <ThemedText type="small" style={{ color: theme.accent }}>
+                        Tentar de novo
+                      </ThemedText>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            )}
+
             <TextInput
               value={fcValor}
               onChangeText={setFcValor}
@@ -463,13 +613,52 @@ export default function SessaoAoVivo() {
       </Modal>
 
       {/* Modal Nota */}
-      <Modal visible={notaAberta} animationType="fade" transparent onRequestClose={() => setNotaAberta(false)}>
+      <Modal visible={notaAberta} animationType="fade" transparent onRequestClose={fecharNota}>
         <View style={styles.modalFundo}>
           <ThemedView style={[styles.modalCaixa, { backgroundColor: theme.backgroundElement }]}>
             <ThemedText type="subtitle">Nota da sessão</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
               Ex.: reduziu carga no agachamento por dor no joelho.
             </ThemedText>
+
+            <Pressable
+              onPress={estadoGravadorNota.isRecording ? pararGravacaoNota : iniciarGravacaoNota}
+              disabled={transcrevendo}
+              style={[
+                styles.botaoGravarNota,
+                {
+                  backgroundColor: estadoGravadorNota.isRecording
+                    ? theme.danger
+                    : theme.backgroundSelected,
+                },
+              ]}
+            >
+              {transcrevendo ? (
+                <ActivityIndicator size="small" color={theme.accent} />
+              ) : (
+                <MaterialSymbol
+                  name={estadoGravadorNota.isRecording ? 'stop_circle' : 'mic'}
+                  size={18}
+                  color={estadoGravadorNota.isRecording ? theme.text : theme.accent}
+                />
+              )}
+              <ThemedText
+                type="small"
+                style={{ color: estadoGravadorNota.isRecording ? theme.text : theme.accent }}
+              >
+                {transcrevendo
+                  ? 'Transcrevendo...'
+                  : estadoGravadorNota.isRecording
+                    ? 'Toque para parar e transcrever'
+                    : 'Gravar nota por voz'}
+              </ThemedText>
+            </Pressable>
+            {erroTranscricao && (
+              <ThemedText type="small" style={{ color: theme.danger }}>
+                {erroTranscricao}
+              </ThemedText>
+            )}
+
             <TextInput
               value={nota}
               onChangeText={setNota}
@@ -480,7 +669,7 @@ export default function SessaoAoVivo() {
               style={[styles.notaInput, { backgroundColor: theme.backgroundSelected, color: theme.text }]}
             />
             <View style={styles.modalBotoes}>
-              <Pressable onPress={() => setNotaAberta(false)} style={styles.modalBotaoCancelar}>
+              <Pressable onPress={fecharNota} style={styles.modalBotaoCancelar}>
                 <ThemedText type="smallBold" themeColor="textSecondary">
                   Cancelar
                 </ThemedText>
@@ -707,6 +896,21 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.two,
     fontSize: 32,
     textAlign: 'center',
+  },
+  blocoBluetooth: { borderRadius: Radius.md, gap: 1, overflow: 'hidden' },
+  botaoGravarNota: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.two,
+    borderRadius: Radius.md,
+    padding: Spacing.two,
+  },
+  itemDispositivo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    padding: Spacing.two,
   },
   notaInput: {
     borderRadius: Radius.md,
