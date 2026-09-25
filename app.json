@@ -35,7 +35,21 @@
           "imageWidth": 76
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": false,
+          "neverForLocation": true,
+          "bluetoothAlwaysPermission": "Usamos Bluetooth para conectar ao monitor de frequência cardíaca durante a sessão."
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Usamos o microfone para transcrever sua nota de voz durante a sessão."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

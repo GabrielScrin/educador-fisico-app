@@ -89,13 +89,13 @@ telas por cima do grupo de abas, escondendo a tab bar automaticamente.
 | Escalas de referência (consulta livre) | ✅ | `/escalas`, fora do fluxo de registro |
 | Login / identificação do educador | ✅ | E-mail/senha via Supabase Auth, testado ponta a ponta em device físico (cadastro + login + guard de rota) em 2026-09-21 |
 | Sync com Supabase | ✅ | Push+pull por uuid, migração remota aplicada e testada ponta a ponta em device físico em 2026-09-21 (dados confirmados nas 3 tabelas remotas) |
-| Build web / PWA | 🟡 | Renderiza e builda certo (`expo export --platform web`, testado no browser), instalável (manifest + service worker) — **deploy na Vercel ainda pendente** (usuário vai conectar o repo pelo dashboard) |
-| FC via Bluetooth | ❌ | Anunciado na UI como "próxima versão", não implementado |
+| Build web / PWA | ✅ | Renderiza e builda certo, instalável (manifest + service worker), **em deploy ativo na Vercel** (`educador-fisico-app.vercel.app`, deploy automático a cada push) |
+| FC via Bluetooth | 🟡 | Código integrado (`react-native-ble-plx`, perfil BLE padrão "Heart Rate" 0x180D) — **não testado em device físico**, exige build EAS nova (módulo nativo) |
 | Editar/excluir cliente, sessão ou leitura | ✅ | Cliente: editar/excluir; sessão: editar nota/excluir; leitura: editar durante sessão e excluir |
-| Transcrição de voz na nota | ❌ | Existia no protótipo visual (Stitch), não implementada — sem serviço de speech-to-text integrado |
-| Multi-dispositivo (2º aparelho do mesmo educador) | ❌ | Depende do sync acima estar rodando de verdade; sync atual não faz merge de conflito (last-write-wins), só push+pull simples |
+| Transcrição de voz na nota | 🟡 | Código integrado (`expo-audio` + Whisper via Edge Function no Supabase) — **não testado em device físico**, exige `OPENAI_API_KEY` configurada como secret do projeto e build EAS nova (módulo nativo) |
+| Multi-dispositivo (2º aparelho do mesmo educador) | 🟡 | Sync continua last-write-wins (sem merge de campo), mas agora detecta e avisa (aba Ajustes) quando um push sobrescreveu uma linha editada em outro aparelho entre dois syncs |
 
-_Atualizado na sessão de 2026-09-21 (login+sync testados ponta a ponta em device físico, 3 bugs reais corrigidos, build web/PWA nova — ver seções "Autenticação e sincronização" e "Web/PWA")._ Sessões anteriores: 2026-09-20 (login+sync, código), 2026-09-15 (CRUD), 2026-09-10 (reskin "Clinical High-Contrast Dark" + navegação em abas).
+_Atualizado na sessão de 2026-09-25 (deploy Vercel destravado, FC via Bluetooth, transcrição de voz e aviso de conflito de sync — código integrado, device físico pendente; ver seções abaixo)._ Sessões anteriores: 2026-09-21 (login+sync testados ponta a ponta em device físico, 3 bugs reais corrigidos, build web/PWA nova), 2026-09-20 (login+sync, código), 2026-09-15 (CRUD), 2026-09-10 (reskin "Clinical High-Contrast Dark" + navegação em abas).
 
 ## Autenticação e sincronização (testado ponta a ponta em device físico, 2026-09-21)
 
@@ -150,7 +150,7 @@ no SQLite local) chegaram certos, com `educador_id`/FKs corretos. Esse teste enc
 conhecidas" abaixo: `SQLiteProvider` memoizado travando `fontsLoaded`, `getSession()` sem
 `.catch()` travando a tela em branco, e `atualizado_em` nulo em linhas antigas quebrando o push.
 
-## Web/PWA (2026-09-21, deploy pendente)
+## Web/PWA (2026-09-21, deploy destravado em 2026-09-25)
 
 Pedido do usuário: uma versão web pra mandar link de preview pro time. `expo-sqlite` tem suporte
 a web em alpha — três peças precisaram ser configuradas do zero pra funcionar (detalhe completo
@@ -168,19 +168,123 @@ com sintoma/causa/fix em "Armadilhas conhecidas" → "`expo-sqlite` no target `w
    aplicado no modo `"single"`).
 
 **Deploy**: `vercel.json` já no repo (build command, output directory, os mesmos cabeçalhos
-COOP/COEP pra produção, rewrite de SPA pra toda rota cair em `index.html`). Não há projeto Vercel
-conectado a este repositório ainda — nem na conta acessível via MCP (`gabrielscrin's projects`,
-mesma conta do EAS — 9 projetos, nenhum deste repo), nem webhook no GitHub, nem `.vercel/` local.
-A ferramenta MCP `create_project` da Vercel também se mostrou quebrada nesta sessão (sempre
-retorna `"missing required property name"` mesmo passando `name` corretamente, testado várias
-formas) — não usar de novo sem verificar se foi corrigida. **Caminho escolhido pelo usuário**:
-conectar o repositório pelo dashboard da Vercel (Import Git Repository), não via CLI/API — fica
-com deploy automático a cada push, sem precisar de login recorrente. Configurar no dashboard:
-Build Command `npx expo export --platform web`, Output Directory `dist`, Framework Other, e as
-env vars `EXPO_PUBLIC_SUPABASE_URL`/`EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (precisam existir em
-build time — o Expo embute `EXPO_PUBLIC_*` no bundle estaticamente).
+COOP/COEP pra produção, rewrite de SPA pra toda rota cair em `index.html`). O usuário conectou o
+repositório pelo dashboard da Vercel (Import Git Repository) — projeto `educador-fisico-app` na
+conta `gabrielscrins-projects`, deploy automático a cada push pra `main`. **Confirmado rodando em
+2026-09-25** via MCP da Vercel: 3 deployments de produção `READY`, domínio
+`educador-fisico-app.vercel.app` ativo. O projeto veio com **SSO Protection** ligado por padrão
+(exige login na conta Vercel pra abrir os domínios `.vercel.app` que não são domínio customizado)
+— desativado manualmente pelo usuário no dashboard (Settings → Deployment Protection), porque a
+ferramenta MCP `update_project` retornou 403 (sem permissão) ao tentar mudar essa config via API
+nesta sessão. A ferramenta MCP `create_project` da Vercel também se mostrou quebrada numa sessão
+anterior (`"missing required property name"`) — não relevante agora que o projeto já existe, mas
+não usar de novo sem revalidar se foi corrigida.
+
+## FC via Bluetooth (2026-09-25, código integrado — não testado em device físico)
+
+Usa o perfil BLE padrão **"Heart Rate"** (Bluetooth SIG, serviço `0x180D` / característica de
+medição `0x2A37`) — funciona com qualquer monitor que anuncie esse serviço (Polar, Garmin, cintas
+genéricas), sem código específico de marca.
+
+- `src/lib/ble.ts` — `BleManager` (singleton, criado só na primeira chamada), permissões em
+  runtime (`solicitarPermissoesBluetooth`: Android 12+ pede `BLUETOOTH_SCAN`/`BLUETOOTH_CONNECT`,
+  Android mais antigo pede `ACCESS_FINE_LOCATION` — exigência do próprio Android pra escanear
+  BLE, não da lib) e o decodificador do valor de bpm (formato fixo da spec Bluetooth: byte 0 são
+  flags, bit 0 diz se o valor vem em 1 ou 2 bytes).
+- `src/hooks/use-heart-rate-monitor.ts` — hook com máquina de estado
+  (`desconectado`/`procurando`/`conectando`/`conectado`/`erro`), expõe `iniciarScan`, `conectar`,
+  `desconectar`, `dispositivos` (lista achada no scan) e `bpm` (atualiza a cada notificação BLE).
+- `src/app/sessao/[id].tsx` — UI dentro do modal de FC: procurar → listar dispositivos → conectar
+  → bpm ao vivo com um botão explícito "toque para usar X bpm" (o registro em si continua sendo
+  um instante escolhido pelo educador, igual às outras escalas — não grava cada notificação BLE
+  sozinha no banco). **Escondido de propósito quando `Platform.OS === 'web'`**:
+  `react-native-ble-plx` é só nativo, não tem implementação web.
+- **Config plugin** (`app.json` → `plugins`): `["react-native-ble-plx", { isBackgroundEnabled:
+  false, neverForLocation: true, bluetoothAlwaysPermission: "..." }]`. Confirmado lendo o código
+  fonte real do plugin (não só o README) — ele já injeta sozinho no manifest/Info.plist:
+  `BLUETOOTH`, `BLUETOOTH_ADMIN`, `BLUETOOTH_CONNECT`, `BLUETOOTH_SCAN`,
+  `ACCESS_COARSE_LOCATION`/`ACCESS_FINE_LOCATION` (Android) e `NSBluetoothAlwaysUsageDescription`
+  (iOS) — não precisa (nem deve) declarar essas permissões manualmente em outro lugar.
+- **Pendente antes de considerar pronto**: exige módulo nativo → build EAS nova (o dev client
+  atual não tem `react-native-ble-plx` compilado) → testar com um monitor BLE real em device
+  físico. Sem isso, é código que compila e builda mas nunca rodou de verdade — mesma régua do
+  resto do projeto (ver "Verificação visual real via screenshot por `adb`" abaixo).
+
+## Transcrição de voz na nota (2026-09-25, código integrado — não testado em device físico)
+
+Grava áudio local (`expo-audio`) e manda pra transcrição via **Whisper (OpenAI)**, chamado de uma
+Edge Function no Supabase — a chave da API (`OPENAI_API_KEY`) nunca entra no bundle do app
+(diferença importante de qualquer variável `EXPO_PUBLIC_*`, que é embutida no bundle e portanto
+pública).
+
+- `supabase/functions/transcrever-audio/index.ts` — recebe `multipart/form-data` (campo
+  `audio`), encaminha pra `POST https://api.openai.com/v1/audio/transcriptions` (`model:
+  "whisper-1"`, `language: "pt"`) usando a secret do servidor, devolve `{ texto }`. A verificação
+  de JWT do Supabase (`verify_jwt`, ligada por padrão — não desligada em `config.toml`) já garante
+  que só um educador logado consegue chamar essa função; não há checagem de auth manual no código
+  da function de propósito.
+- `src/lib/transcricao.ts` — monta o `FormData` com o arquivo local (padrão do React Native: um
+  objeto `{ uri, name, type }` no lugar de um `Blob` de verdade, porque não existe filesystem de
+  Blob em RN) e chama `supabase.functions.invoke('transcrever-audio', { body: formData })` — o
+  `Authorization` com o JWT do usuário logado é anexado automaticamente pelo supabase-js.
+- `src/app/sessao/[id].tsx` — botão de microfone no modal de Nota (`useAudioRecorder`,
+  `useAudioRecorderState` de `expo-audio`), grava → transcreve → concatena o texto na nota
+  existente (nunca substitui o que já tinha sido escrito).
+- **Config plugin** (`app.json` → `plugins`): `["expo-audio", { microphonePermission: "..." }]`.
+- **Pendente antes de considerar pronto**:
+  1. **Configurar a secret no Supabase** — `supabase secrets set OPENAI_API_KEY=sk-...` (nenhuma
+     chave foi criada nem configurada nesta sessão; sem isso a function responde erro 500).
+  2. **Deploy da function** — `supabase functions deploy transcrever-audio` (ainda não deployada).
+  3. Build EAS nova (mesmo motivo do BLE — `expo-audio` grava via módulo nativo) e teste em device
+     físico com custo real de API.
+
+## Multi-dispositivo — aviso de conflito de sync (2026-09-25)
+
+Continua sendo **last-write-wins** (decisão deliberada, não um merge de campo a campo — ver
+`src/lib/sync.ts`). O que mudou: antes de cada push, `contarConflitos()` compara, por linha
+pendente de envio, o `sincronizado_em` deste aparelho (até onde ele sabe que já sincronizou)
+contra o `atualizado_em` que está na nuvem agora. Se a nuvem tem uma versão mais nova que este
+aparelho nunca viu — e não é a própria versão que ele está enviando agora —, outro aparelho editou
+a mesma linha nesse intervalo: é um conflito real. O push continua acontecendo (LWW não muda), mas
+o conflito é contado e devolvido em `ResultadoSincronizacao.conflitos`, exposto por `useSync()` e
+mostrado como aviso na aba Ajustes (nunca silencioso). Não testado com dois aparelhos reais ainda
+— a lógica foi validada só por leitura de código e typecheck.
 
 ## Armadilhas conhecidas
+
+### `docs.expo.dev` pode estar bloqueado no ambiente de execução — GitHub raw/npm registry como alternativa
+
+- **Contexto**: o `AGENTS.md` pede pra sempre confirmar contra a doc exata da versão do Expo antes
+  de codar (já teve um caso de alucinação de doc numa sessão anterior). Em ambientes com política
+  de rede restrita (ex.: sessão na nuvem do Claude Code), `docs.expo.dev` pode estar bloqueado
+  enquanto `raw.githubusercontent.com` e `registry.npmjs.org` continuam liberados.
+- **Fix**: os mesmos arquivos `.mdx` que geram a doc oficial existem no repositório
+  `expo/expo` (branch `main`), em `docs/pages/versions/vX.Y.Z/sdk/<pacote>.mdx` — buscar via
+  `https://raw.githubusercontent.com/expo/expo/main/docs/pages/versions/vX.Y.Z/sdk/<pacote>.mdx`.
+  Pra bibliotecas de terceiros com config plugin (ex.: `react-native-ble-plx`), o README do GitHub
+  raramente documenta o comportamento exato do plugin — mais confiável baixar o tarball publicado
+  (`registry.npmjs.org/<pacote>` → `dist.tarball` da versão desejada) e ler o `plugin/build/*.js`
+  compilado direto, que é o que de fato roda.
+- **Como aplicar**: se uma tentativa de acessar `docs.expo.dev` falhar com erro de rede/proxy,
+  tentar essas duas alternativas antes de desistir de confirmar contra a doc real.
+
+### Efeito que sincroniza estado automaticamente (`useEffect` + `setState`) é proibido pelo React Compiler
+
+- **Sintoma**: `expo lint` acusa `react-hooks/set-state-in-effect` — "Calling setState
+  synchronously within an effect can trigger cascading renders" — num efeito que parecia
+  inofensivo (ex.: espelhar um valor de um hook externo pra dentro de um `useState` local).
+- **Causa raiz**: mesma familia de regra do React Compiler que já pegou `Date.now()` em
+  `useMemo` (ver entrada abaixo) — um `useEffect` cujo corpo só chama `setState` a partir de outro
+  estado observado é, na prática, uma sincronização que o React já resolve sozinho ao re-renderizar;
+  fazer isso manualmente causa um render extra em cascata.
+- **Fix aplicado** (`src/app/sessao/[id].tsx`, integração do monitor de FC via Bluetooth): em vez
+  de um `useEffect` espelhando `monitorFc.bpm` pro estado local `fcValor` a cada notificação BLE,
+  o valor ao vivo (`monitorFc.bpm`) é mostrado direto na UI, e `fcValor` só é setado por uma ação
+  explícita do usuário (toque num botão "usar bpm ao vivo") — nunca automaticamente dentro de um
+  efeito.
+- **Como aplicar**: sempre que a tentação for "espelhar X num useState via useEffect", perguntar
+  se X pode simplesmente ser lido/exibido direto, ou se a atualização do estado local pode nascer
+  de um handler de evento em vez de um efeito.
 
 ### `ON DELETE CASCADE` exige `PRAGMA foreign_keys = ON`
 

@@ -113,11 +113,11 @@ tempo dentro da sessão quanto médias/gráficos de evolução entre sessões.
 |---|---|---|
 | Armazenamento | 100% local (SQLite) + sincronização por e-mail/senha como backup — testado ponta a ponta em device físico em 2026-09-21 (cadastro, login e sync confirmados, dados batendo nas 3 tabelas remotas) | Merge de conflito multi-dispositivo fica pro gap abaixo |
 | Login | E-mail/senha via Supabase Auth, tela de login/cadastro protege o app (`src/app/(auth)/`) — testado ponta a ponta em device físico | — |
-| Frequência cardíaca | Digitada manualmente num modal | "Integração automática com sensor Bluetooth" — já anunciada como texto de interface no modal de FC (`sessao/[id].tsx`), ainda não implementada |
+| Frequência cardíaca | Código integrado (perfil BLE padrão "Heart Rate", `react-native-ble-plx`) — conecta a qualquer monitor de peito/pulso que anuncie esse serviço (Polar, Garmin, cintas genéricas), auto-preenche o modal de FC com o bpm ao vivo. **Não testado em device físico ainda** — exige build EAS nova (módulo nativo) | Validar em device físico com um monitor real |
 | Edição/exclusão de cliente, sessão ou leitura | Implementada; leitura pode ser editada durante a sessão e excluída também pelo prontuário | Falta validar os fluxos em device físico |
-| Transcrição de voz na nota de fechamento | Não existe | O protótipo visual tinha um botão de microfone; não implementado por não haver serviço de speech-to-text integrado ainda |
-| Multi-dispositivo | Não existe — dado mora só naquele celular | Depende da sincronização acima |
-| Versão web (PWA) | Builda e roda no navegador (testado), instalável — feita a pedido do usuário pra dar link de preview pro time, não como canal de distribuição principal | Deploy na Vercel pendente (projeto criado, primeiro build não disparado ainda) |
+| Transcrição de voz na nota de fechamento | Código integrado — grava áudio (`expo-audio`) e transcreve via Whisper (OpenAI) chamado de uma Edge Function no Supabase (a chave da API nunca entra no bundle do app). **Não testado em device físico ainda**; exige `OPENAI_API_KEY` configurada como secret do projeto Supabase (`supabase secrets set OPENAI_API_KEY=...`) antes de funcionar de verdade | Validar em device físico, com custo real de API |
+| Multi-dispositivo | Sync continua sendo last-write-wins (sem merge campo a campo), mas agora detecta e avisa na aba Ajustes quando uma sincronização sobrescreveu uma linha que tinha sido editada em outro aparelho entre dois syncs — deixa de ser silencioso | Merge de campo a campo, se algum dia for necessário |
+| Versão web (PWA) | Builda e roda no navegador (testado), instalável, **e já em deploy ativo na Vercel** (`educador-fisico-app.vercel.app`, deploy automático a cada push) | FC via Bluetooth não funciona no navegador (react-native-ble-plx é só nativo) — escondido de propósito na versão web |
 
 ## Fora de escopo, por ora
 
