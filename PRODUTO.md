@@ -119,6 +119,13 @@ tempo dentro da sessão quanto médias/gráficos de evolução entre sessões.
 | Multi-dispositivo | Sync continua sendo last-write-wins (sem merge campo a campo), mas agora detecta e avisa na aba Ajustes quando uma sincronização sobrescreveu uma linha que tinha sido editada em outro aparelho entre dois syncs — deixa de ser silencioso | Merge de campo a campo, se algum dia for necessário |
 | Versão web (PWA) | Builda e roda no navegador (testado), instalável, **e já em deploy ativo na Vercel** (`educador-fisico-app.vercel.app`, deploy automático a cada push) | FC via Bluetooth não funciona no navegador (react-native-ble-plx é só nativo) — escondido de propósito na versão web |
 
+## Assinatura (planejado, ainda não implementado)
+
+Decisão tomada em 2026-09-26: o app vai ganhar um serviço de assinatura (o educador físico paga
+pra usar, Free limitado + Pro), vendida nativamente pelas lojas (App Store/Play Store) via
+RevenueCat. Nada disso está implementado ainda — plano completo, decisões e fases em
+`ASSINATURA.md`.
+
 ## Fora de escopo, por ora
 
 - Qualquer coisa voltada ao *cliente final* treinar sozinho (isso é ferramenta de trabalho do

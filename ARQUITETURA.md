@@ -649,6 +649,12 @@ npx expo lint                          # ESLint (inclui regras do React Compiler
 npx expo export --platform ios         # valida bundle completo sem precisar de device
 ```
 
+## Assinatura (planejado, ainda não implementado)
+
+Ver `ASSINATURA.md` pro plano completo (decisões, fases, RevenueCat + webhook + gating). Nada
+disso existe em código ainda — nenhuma dependência de pagamento no `package.json`, nenhuma tabela
+`assinaturas` no Supabase.
+
 ## Deploy / publicação
 
 Ainda não há pipeline de deploy — o app está em fase de MVP/teste em device físico via EAS
