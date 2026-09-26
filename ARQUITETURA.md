@@ -90,12 +90,12 @@ telas por cima do grupo de abas, escondendo a tab bar automaticamente.
 | Login / identificação do educador | ✅ | E-mail/senha via Supabase Auth, testado ponta a ponta em device físico (cadastro + login + guard de rota) em 2026-09-21 |
 | Sync com Supabase | ✅ | Push+pull por uuid, migração remota aplicada e testada ponta a ponta em device físico em 2026-09-21 (dados confirmados nas 3 tabelas remotas) |
 | Build web / PWA | ✅ | Renderiza e builda certo, instalável (manifest + service worker), **em deploy ativo na Vercel** (`educador-fisico-app.vercel.app`, deploy automático a cada push) |
-| FC via Bluetooth | 🟡 | Código integrado (`react-native-ble-plx`, perfil BLE padrão "Heart Rate" 0x180D) — **não testado em device físico**, exige build EAS nova (módulo nativo) |
+| FC via Bluetooth | ✅ | `react-native-ble-plx`, perfil BLE padrão "Heart Rate" 0x180D — **testado em device físico** em 2026-09-25: permissão real concedida, scan real iniciado. Sem monitor físico à mão pra confirmar o pareamento/leitura de bpm de um sensor real |
 | Editar/excluir cliente, sessão ou leitura | ✅ | Cliente: editar/excluir; sessão: editar nota/excluir; leitura: editar durante sessão e excluir |
-| Transcrição de voz na nota | 🟡 | Código integrado (`expo-audio` + Gemini via Edge Function no Supabase) — **não testado em device físico**, exige `GEMINI_API_KEY` configurada como secret do projeto e build EAS nova (módulo nativo) |
-| Multi-dispositivo (2º aparelho do mesmo educador) | 🟡 | Sync continua last-write-wins (sem merge de campo), mas agora detecta e avisa (aba Ajustes) quando um push sobrescreveu uma linha editada em outro aparelho entre dois syncs |
+| Transcrição de voz na nota | ✅ | `expo-audio` + Gemini via Edge Function — **testado ponta a ponta em device físico** em 2026-09-25 (gravou, transcreveu, texto certo apareceu na nota). Corrigido um bug real do upload nessa mesma sessão (ver "Armadilhas conhecidas"); tier gratuito do Gemini responde 503 "high demand" com alguma frequência — a function já tenta de novo uma vez antes de desistir |
+| Multi-dispositivo (2º aparelho do mesmo educador) | 🟡 | Sync continua last-write-wins (sem merge de campo), avisa (aba Ajustes) quando um push sobrescreveu uma linha editada em outro aparelho — aviso não testado com 2 aparelhos físicos reais ainda |
 
-_Atualizado na sessão de 2026-09-25 (deploy Vercel destravado, FC via Bluetooth, transcrição de voz e aviso de conflito de sync — código integrado, device físico pendente; ver seções abaixo)._ Sessões anteriores: 2026-09-21 (login+sync testados ponta a ponta em device físico, 3 bugs reais corrigidos, build web/PWA nova), 2026-09-20 (login+sync, código), 2026-09-15 (CRUD), 2026-09-10 (reskin "Clinical High-Contrast Dark" + navegação em abas).
+_Atualizado na sessão de 2026-09-25 (parte 2, terminal): FC Bluetooth e transcrição de voz testados de verdade em device físico, um bug real de upload de áudio corrigido no caminho, layout web corrigido (full-bleed em desktop). Sessão anterior no mesmo dia (nuvem, `claude/tender-bell-0d9q88`): código integrado + deploy Vercel destravado. Sessões anteriores: 2026-09-21 (login+sync testados ponta a ponta em device físico, 3 bugs reais corrigidos, build web/PWA nova), 2026-09-20 (login+sync, código), 2026-09-15 (CRUD), 2026-09-10 (reskin "Clinical High-Contrast Dark" + navegação em abas).
 
 ## Autenticação e sincronização (testado ponta a ponta em device físico, 2026-09-21)
 
@@ -205,44 +205,42 @@ genéricas), sem código específico de marca.
   `BLUETOOTH`, `BLUETOOTH_ADMIN`, `BLUETOOTH_CONNECT`, `BLUETOOTH_SCAN`,
   `ACCESS_COARSE_LOCATION`/`ACCESS_FINE_LOCATION` (Android) e `NSBluetoothAlwaysUsageDescription`
   (iOS) — não precisa (nem deve) declarar essas permissões manualmente em outro lugar.
-- **Pendente antes de considerar pronto**: exige módulo nativo → build EAS nova (o dev client
-  atual não tem `react-native-ble-plx` compilado) → testar com um monitor BLE real em device
-  físico. Sem isso, é código que compila e builda mas nunca rodou de verdade — mesma régua do
-  resto do projeto (ver "Verificação visual real via screenshot por `adb`" abaixo).
+- **Testado em device físico em 2026-09-25**: permissão real do Android concedida ("Permitir que
+  o serviço de educador-fisico-app encontre, conecte-se..."), scan real iniciado ("Procurando
+  monitores próximos..."). Sem um monitor BLE físico à mão nesta sessão pra confirmar
+  pareamento/leitura de bpm de um sensor de verdade — só isso ficou pendente.
 
-## Transcrição de voz na nota (2026-09-25, código integrado — não testado em device físico)
+## Transcrição de voz na nota (2026-09-25, testado ponta a ponta em device físico)
 
 Grava áudio local (`expo-audio`) e manda pra transcrição via **Gemini** (Google AI Studio, tier
 gratuito), chamado de uma Edge Function no Supabase — a chave da API (`GEMINI_API_KEY`) nunca
 entra no bundle do app (diferença importante de qualquer variável `EXPO_PUBLIC_*`, que é embutida
 no bundle e portanto pública). Trocado de Whisper (OpenAI) pra Gemini na sessão de 2026-09-25 —
 decisão do usuário, tier gratuito do Gemini cobre o volume esperado (nota de voz avulsa, não uso
-em massa).
+em massa). Testado em device físico real: gravou, transcreveu, o texto certo apareceu na nota.
 
-- `supabase/functions/transcrever-audio/index.ts` — recebe `multipart/form-data` (campo
-  `audio`), converte pra base64 e encaminha pra `POST
+- `supabase/functions/transcrever-audio/index.ts` — recebe **JSON** (campo `audioBase64`, string
+  base64 — não `multipart/form-data`, ver armadilha abaixo) e encaminha pra `POST
   https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent`
   (áudio como `inline_data`, mime `audio/mp4` — container real de um `.m4a`) usando a secret do
-  servidor, devolve `{ texto }`. `gemini-flash-latest` é um alias estável (não uma versão pontual
-  tipo `gemini-2.0-flash`, que a Google já descontinuou uma vez neste projeto) — resolve pro Flash
-  mais recente disponível na conta, hoje `gemini-3.8-flash`. A verificação de JWT do Supabase
-  (`verify_jwt`, ligada por padrão — não desligada em `config.toml`) já garante que só um educador
-  logado consegue chamar essa função; não há checagem de auth manual no código da function de
-  propósito.
-- `src/lib/transcricao.ts` — monta o `FormData` com o arquivo local (padrão do React Native: um
-  objeto `{ uri, name, type }` no lugar de um `Blob` de verdade, porque não existe filesystem de
-  Blob em RN) e chama `supabase.functions.invoke('transcrever-audio', { body: formData })` — o
-  `Authorization` com o JWT do usuário logado é anexado automaticamente pelo supabase-js.
+  servidor, devolve `{ texto }`. Se o Gemini responder 503 ("high demand" — acontece com alguma
+  frequência no tier gratuito, visto repetidas vezes testando em device físico), tenta de novo uma
+  vez depois de 1.5s antes de desistir. `gemini-flash-latest` é um alias estável (não uma versão
+  pontual tipo `gemini-2.0-flash`, que a Google já descontinuou uma vez neste projeto) — resolve
+  pro Flash mais recente disponível na conta, hoje `gemini-3.8-flash`. A verificação de JWT do
+  Supabase (`verify_jwt`, ligada por padrão — não desligada em `config.toml`) já garante que só um
+  educador logado consegue chamar essa função; não há checagem de auth manual no código da
+  function de propósito.
+- `src/lib/transcricao.ts` — lê o arquivo gravado como base64 (`new File(uri).base64()` de
+  `expo-file-system`) e chama `supabase.functions.invoke('transcrever-audio', { body: {
+  audioBase64 } })` — corpo JSON comum, não `FormData`. O `Authorization` com o JWT do usuário
+  logado é anexado automaticamente pelo supabase-js.
 - `src/app/sessao/[id].tsx` — botão de microfone no modal de Nota (`useAudioRecorder`,
   `useAudioRecorderState` de `expo-audio`), grava → transcreve → concatena o texto na nota
   existente (nunca substitui o que já tinha sido escrito).
 - **Config plugin** (`app.json` → `plugins`): `["expo-audio", { microphonePermission: "..." }]`.
-- **Pendente antes de considerar pronto**:
-  1. **Configurar a secret no Supabase** — `supabase secrets set GEMINI_API_KEY=...` (chave do
-     Google AI Studio, tier gratuito; sem isso a function responde erro 500).
-  2. **Deploy da function** — `supabase functions deploy transcrever-audio` (ainda não deployada).
-  3. Build EAS nova (mesmo motivo do BLE — `expo-audio` grava via módulo nativo) e teste em device
-     físico com custo real de API.
+- **Pendente**: nada estrutural — só a instabilidade externa do tier gratuito do Gemini sob carga
+  (503 intermitente, mitigado com uma tentativa extra, não eliminado).
 
 ## Multi-dispositivo — aviso de conflito de sync (2026-09-25)
 
@@ -311,6 +309,38 @@ mostrado como aviso na aba Ajustes (nunca silencioso). Não testado com dois apa
 - **Outra pegadinha relacionada**: mesmo com a sessão certa, `supabase link` nesse projeto retorna
   403 ("não tem privilégios") — mas `secrets list/set` e `functions deploy` funcionam normalmente
   passando `--project-ref` direto, sem precisar de `link`. Não perder tempo tentando linkar.
+
+### `FormData` com `{ uri, name, type }` pro `supabase.functions.invoke` falha em device físico real — base64/JSON é o caminho robusto
+
+- **Sintoma**: chamar uma Edge Function via `supabase.functions.invoke(nome, { body: formData })`
+  (`FormData` com um campo `{ uri, name, type }`, a convenção clássica de upload de arquivo local
+  em React Native) falha em device físico real com `[Error: Failed to send a request to the Edge
+  Function]` — **nem chega a sair uma requisição de rede** (não é erro HTTP, é o `fetch()` interno
+  do supabase-js lançando exceção antes de qualquer round-trip). Reproduzido de forma consistente
+  (3x seguidas) na função `transcrever-audio`, mesmo com a function deployada e funcionando (testei
+  a mesma function direto via `curl` com um WAV sintético — respondeu normal).
+- **Causa raiz exata não confirmada** (não valia a pena aprofundar mais depois do fix funcionar),
+  mas o padrão bate com incompatibilidades conhecidas entre o `FormData`/`Blob` "estilo RN"
+  (`{uri,name,type}`) e o `fetch` que o `supabase-js` usa internamente — pode não reconhecer esse
+  formato específico e falhar ao montar o corpo multipart, dependendo da versão do SDK e da forma
+  como o RN resolve `global.fetch` neste projeto (RN 0.86, nova arquitetura).
+- **Fix**: ler o arquivo local como base64 (`new File(uri).base64()` de `expo-file-system`) e
+  mandar num corpo **JSON comum** (`{ body: { audioBase64: base64 } }`) em vez de `FormData`. A
+  Edge Function troca `req.formData()` por `req.json()`. Base64 num JSON é o caminho testado e sem
+  surpresas do supabase-js — e como o Gemini já queria base64 mesmo (`inline_data.data`), não
+  introduz nenhuma conversão a mais no servidor.
+- **Como debugar isso de novo se aparecer em outro lugar**: `error.message` do supabase-js só diz
+  "Failed to send a request to the Edge Function" — genérico demais pra saber a causa. Testar a
+  function isolada com `curl` (usando um token real via `POST .../auth/v1/token?grant_type=password`
+  e a `apikey` do `.env`) é o jeito mais rápido de confirmar se o problema é client-side (não chega
+  request nenhuma) ou server-side (a function responde, só que com erro).
+- **Como testar telas autenticadas em device físico sem usar a conta real do usuário**: criar um
+  usuário descartável já confirmado via Admin API do Supabase (`POST .../auth/v1/admin/users` com
+  `email_confirm: true`, usando `SUPABASE_SECRET_KEY` do `.env`) evita o passo de confirmação de
+  e-mail que bloqueia `signUp` normal — e depois deletar (`DELETE .../auth/v1/admin/users/<id>`).
+- **Puxar um arquivo do storage privado do app pra inspecionar**: `adb exec-out run-as
+  <package> cat caminho/relativo/arquivo > destino-local` (arquivos em `cache/`/`files/` do app não
+  são world-readable, `adb pull` direto falha; `run-as` + `exec-out` contorna isso).
 
 ### Efeito que sincroniza estado automaticamente (`useEffect` + `setState`) é proibido pelo React Compiler
 

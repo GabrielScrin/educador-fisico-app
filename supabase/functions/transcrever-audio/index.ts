@@ -24,47 +24,56 @@ Deno.serve(async (req) => {
     );
   }
 
-  let form: FormData;
+  // Recebe JSON com o áudio já em base64 (não multipart/form-data) — o cliente RN falhava ao
+  // montar um FormData com `{ uri, name, type }` num device físico real ("Failed to send a
+  // request to the Edge Function", nunca chegava a sair uma requisição de rede). Gemini já recebe
+  // áudio inline como base64 de qualquer forma, então isso elimina uma conversão sem substituir
+  // nenhuma outra — ver src/lib/transcricao.ts.
+  let corpo: { audioBase64?: unknown };
   try {
-    form = await req.formData();
+    corpo = await req.json();
   } catch {
     return Response.json(
-      { erro: 'Corpo inválido — esperado multipart/form-data com o campo "audio".' },
+      { erro: 'Corpo inválido — esperado JSON com o campo "audioBase64".' },
       { status: 400 },
     );
   }
 
-  const arquivo = form.get('audio');
-  if (!(arquivo instanceof File)) {
-    return Response.json({ erro: 'Campo "audio" ausente ou inválido.' }, { status: 400 });
+  const base64 = corpo.audioBase64;
+  if (typeof base64 !== 'string' || base64.length === 0) {
+    return Response.json({ erro: 'Campo "audioBase64" ausente ou inválido.' }, { status: 400 });
   }
 
-  // Gemini recebe áudio inline como base64 dentro do corpo JSON (sem upload separado) — suficiente
-  // pra uma nota de voz curta, que é o único caso de uso aqui.
-  const bytes = new Uint8Array(await arquivo.arrayBuffer());
-  let binario = '';
-  for (let i = 0; i < bytes.length; i++) binario += String.fromCharCode(bytes[i]);
-  const base64 = btoa(binario);
+  async function chamarGemini() {
+    return fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${MODELO_GEMINI}:generateContent`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiApiKey },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text: 'Transcreva o áudio a seguir em português do Brasil. Responda apenas com o texto transcrito, sem comentários, sem aspas e sem formatação adicional.',
+                },
+                { inline_data: { mime_type: 'audio/mp4', data: base64 } },
+              ],
+            },
+          ],
+        }),
+      },
+    );
+  }
 
-  const respostaGemini = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODELO_GEMINI}:generateContent`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiApiKey },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                text: 'Transcreva o áudio a seguir em português do Brasil. Responda apenas com o texto transcrito, sem comentários, sem aspas e sem formatação adicional.',
-              },
-              { inline_data: { mime_type: 'audio/mp4', data: base64 } },
-            ],
-          },
-        ],
-      }),
-    },
-  );
+  // O tier gratuito do Gemini responde 503 "high demand" com alguma frequência (visto repetidas
+  // vezes testando em device físico) — uma tentativa extra depois de uma pausa curta resolve a
+  // maioria dos casos sem custo perceptível pro educador, que já esperou a gravação processar.
+  let respostaGemini = await chamarGemini();
+  if (respostaGemini.status === 503) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    respostaGemini = await chamarGemini();
+  }
 
   if (!respostaGemini.ok) {
     const detalhe = await respostaGemini.text();
