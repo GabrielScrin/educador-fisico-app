@@ -11,6 +11,6 @@
     }
   ],
   "rewrites": [
-    { "source": "/((?!_expo|assets|manifest.json|sw.js|icon-1024.png|favicon.ico).*)", "destination": "/index.html" }
+    { "source": "/((?!_expo|assets|manifest.json|sw.js|icon-192.png|icon-512.png|icon-1024.png|favicon.ico).*)", "destination": "/index.html" }
   ]
 }

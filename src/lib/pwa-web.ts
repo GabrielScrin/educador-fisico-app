@@ -5,6 +5,7 @@
 // defined"). Injetar aqui evita esse problema por completo, já que só roda depois de montado
 // no browser de verdade.
 export function configurarPwaWeb() {
+  document.documentElement.lang = 'pt-BR';
   document.title = 'Educador Físico';
 
   adicionarMeta('description', 'Registro de esforço e dor do cliente, sessão a sessão, pro educador físico usar em pé durante o treino.');

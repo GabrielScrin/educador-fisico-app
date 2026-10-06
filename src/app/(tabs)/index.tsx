@@ -11,9 +11,26 @@ import { ThemedView } from '@/components/themed-view';
 import { Radius, Spacing } from '@/constants/theme';
 import { faixaDoValor, ESCALAS } from '@/constants/scales';
 import { criarSessao, listarClientesComResumo, type ClienteComResumo } from '@/db/queries';
+import { useAuth } from '@/hooks/use-auth';
+import { useSync } from '@/hooks/use-sync';
 import { useTheme } from '@/hooks/use-theme';
 
 type Filtro = 'todos' | 'hoje' | 'dor';
+
+// Texto do cabeçalho reflete o estado real: sem login é só local; com login, mostra o resultado
+// da última sincronização de verdade (nunca "sincronizado" sem ter sincronizado).
+function textoStatusCabecalho(
+  logado: boolean,
+  estado: 'ocioso' | 'sincronizando' | 'erro',
+  ultimaSincronizacao: Date | null,
+): string {
+  if (!logado) return 'Local · sem sincronização';
+  if (estado === 'sincronizando') return 'Sincronizando...';
+  if (estado === 'erro') return 'Falha ao sincronizar';
+  if (!ultimaSincronizacao) return 'Conta conectada';
+  const hora = ultimaSincronizacao.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return `Sincronizado às ${hora}`;
+}
 
 function ehHoje(iso: string | null) {
   if (!iso) return false;
@@ -29,6 +46,8 @@ function ehHoje(iso: string | null) {
 export default function ListaClientes() {
   const db = useSQLiteContext();
   const theme = useTheme();
+  const { session } = useAuth();
+  const { estado: estadoSync, ultimaSincronizacao } = useSync();
   const [clientes, setClientes] = useState<ClienteComResumo[]>([]);
   const [busca, setBusca] = useState('');
   const [filtro, setFiltro] = useState<Filtro>('todos');
@@ -65,7 +84,7 @@ export default function ListaClientes() {
             <View style={styles.headerEyebrow}>
               <View style={[styles.pontoPulso, { backgroundColor: theme.accent }]} />
               <ThemedText type="label" themeColor="textMuted">
-                Local · sem sincronização
+                {textoStatusCabecalho(!!session, estadoSync, ultimaSincronizacao)}
               </ThemedText>
             </View>
             <ThemedText type="title" style={styles.headerTitulo}>
