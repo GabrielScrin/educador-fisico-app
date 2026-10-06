@@ -1,13 +1,16 @@
+import { useEffect } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
+import { useDialogo } from '@/components/dialogo';
 import { MaterialSymbol } from '@/components/material-symbol';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Radius, Spacing } from '@/constants/theme';
 import { LARGURA_MAX_CONTEUDO, useLayoutDesktop } from '@/hooks/use-layout-desktop';
 import { useTheme } from '@/hooks/use-theme';
+import { abrirJanelaInstalacao, instrucoesInstalacao, ouvirInstalacao } from '@/lib/instalacao-web';
 
 // Página de entrada pública: é o que aparece pra quem abre o link sem estar logado. Apresenta o
 // produto e leva pro login ou pro cadastro. Não mostra dado real nem promessa clínica.
@@ -46,6 +49,18 @@ const BARRAS_EXEMPLO = [3, 4, 4, 6, 5, 7, 8];
 export default function BemVindo() {
   const theme = useTheme();
   const desktop = useLayoutDesktop();
+  const alertar = useDialogo();
+  // Captura o aviso de instalação do navegador (Chrome) assim que a página abre.
+  useEffect(() => ouvirInstalacao(() => {}), []);
+
+  // Com a janela do navegador disponível, abre direto; senão, mostra o passo a passo do aparelho.
+  async function instalar() {
+    const abriu = await abrirJanelaInstalacao();
+    if (!abriu) {
+      const { titulo, mensagem } = instrucoesInstalacao();
+      alertar(titulo, mensagem);
+    }
+  }
 
   return (
     <ThemedView style={styles.container}>
@@ -104,6 +119,11 @@ export default function BemVindo() {
                   >
                     <ThemedText type="smallBold">Já tenho conta · Entrar</ThemedText>
                   </Pressable>
+                  {!desktop && (
+                    <Pressable onPress={instalar} style={[styles.botaoSecundario, { borderColor: theme.border }]}>
+                      <ThemedText type="smallBold">Instalar no celular</ThemedText>
+                    </Pressable>
+                  )}
                 </View>
               </View>
 

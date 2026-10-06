@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -10,8 +10,10 @@ import { ThemedView } from '@/components/themed-view';
 import { Radius, Spacing } from '@/constants/theme';
 import { atualizarCliente, buscarCliente, excluirCliente } from '@/db/queries';
 import { useTheme } from '@/hooks/use-theme';
+import { useDialogo } from '@/components/dialogo';
 
 export default function EditarCliente() {
+  const alertar = useDialogo();
   const { id } = useLocalSearchParams<{ id: string }>();
   const clienteId = Number(id);
   const db = useSQLiteContext();
@@ -39,7 +41,7 @@ export default function EditarCliente() {
   }
 
   function confirmarExclusao() {
-    Alert.alert(
+    alertar(
       'Excluir cliente',
       `Isso apaga "${nome}" e todo o histórico de sessões e leituras dele. Essa ação não pode ser desfeita.`,
       [

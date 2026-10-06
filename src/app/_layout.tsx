@@ -14,6 +14,7 @@ import { SQLiteProvider } from 'expo-sqlite';
 import { useEffect } from 'react';
 import { Platform, StyleSheet, View, type ViewStyle } from 'react-native';
 
+import { DialogoProvider } from '@/components/dialogo';
 import { MenuLateral } from '@/components/menu-lateral';
 import { Colors } from '@/constants/theme';
 import { applyMigrations } from '@/db/migrate';
@@ -52,8 +53,10 @@ export default function RootLayout() {
       <AuthProvider>
         <SyncProvider>
           <ThemeProvider value={NAV_THEME}>
-            <StatusBar style="light" />
-            <RootNavigator />
+            <DialogoProvider>
+              <StatusBar style="light" />
+              <RootNavigator />
+            </DialogoProvider>
           </ThemeProvider>
         </SyncProvider>
       </AuthProvider>

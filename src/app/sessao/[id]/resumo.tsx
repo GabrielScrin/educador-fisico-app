@@ -1,6 +1,6 @@
 import * as Linking from 'expo-linking';
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -21,6 +21,7 @@ import {
 } from '@/db/queries';
 import { formatarDuracao, useElapsedSeconds } from '@/hooks/use-elapsed-timer';
 import { useTheme } from '@/hooks/use-theme';
+import { useDialogo } from '@/components/dialogo';
 
 function mediaOu(valores: number[]) {
   if (valores.length === 0) return null;
@@ -32,6 +33,7 @@ function picoOu(valores: number[]) {
 }
 
 export default function ResumoSessao() {
+  const alertar = useDialogo();
   const { id } = useLocalSearchParams<{ id: string }>();
   const sessaoId = Number(id);
   const db = useSQLiteContext();
@@ -100,7 +102,7 @@ export default function ResumoSessao() {
     ].filter(Boolean);
     const texto = encodeURIComponent(linhas.join('\n'));
     Linking.openURL(`https://api.whatsapp.com/send?text=${texto}`).catch(() =>
-      Alert.alert('Não foi possível abrir o WhatsApp'),
+      alertar('Não foi possível abrir o WhatsApp'),
     );
   }
 

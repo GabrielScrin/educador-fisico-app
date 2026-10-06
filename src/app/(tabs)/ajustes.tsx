@@ -1,6 +1,6 @@
 import Constants from 'expo-constants';
 import type { ReactNode } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
@@ -12,15 +12,17 @@ import { useAuth } from '@/hooks/use-auth';
 import { useSync } from '@/hooks/use-sync';
 import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
+import { useDialogo } from '@/components/dialogo';
 
 export default function Ajustes() {
+  const alertar = useDialogo();
   const theme = useTheme();
   const versao = Constants.expoConfig?.version ?? '—';
   const { session } = useAuth();
   const { estado, ultimaSincronizacao, erro, conflitos, sincronizarAgora } = useSync();
 
   function sair() {
-    Alert.alert('Sair da conta', 'Seus dados continuam salvos neste aparelho.', [
+    alertar('Sair da conta', 'Seus dados continuam salvos neste aparelho.', [
       { text: 'Cancelar', style: 'cancel' },
       { text: 'Sair', style: 'destructive', onPress: () => supabase.auth.signOut() },
     ]);

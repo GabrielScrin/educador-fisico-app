@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -25,6 +25,7 @@ import {
   type ResumoSessao,
 } from '@/db/queries';
 import { useTheme } from '@/hooks/use-theme';
+import { useDialogo } from '@/components/dialogo';
 
 function formatarData(iso: string) {
   const d = new Date(iso);
@@ -40,6 +41,7 @@ function media(valor: number | null) {
 }
 
 export default function PerfilCliente() {
+  const alertar = useDialogo();
   const { id } = useLocalSearchParams<{ id: string }>();
   const clienteId = Number(id);
   const db = useSQLiteContext();
@@ -108,7 +110,7 @@ export default function PerfilCliente() {
   }
 
   function confirmarExclusaoSessao(sessao: ResumoSessao) {
-    Alert.alert(
+    alertar(
       'Excluir sessão',
       `Isso apaga a sessão de ${formatarData(sessao.iniciada_em)} e todas as leituras registradas nela. Essa ação não pode ser desfeita.`,
       [
@@ -127,7 +129,7 @@ export default function PerfilCliente() {
   }
 
   function abrirOpcoesSessao(sessao: ResumoSessao) {
-    Alert.alert(formatarData(sessao.iniciada_em), undefined, [
+    alertar(formatarData(sessao.iniciada_em), undefined, [
       { text: 'Editar nota', onPress: () => abrirEdicaoNota(sessao) },
       { text: 'Excluir sessão', style: 'destructive', onPress: () => confirmarExclusaoSessao(sessao) },
       { text: 'Cancelar', style: 'cancel' },
@@ -135,7 +137,7 @@ export default function PerfilCliente() {
   }
 
   function confirmarExclusaoLeitura(sessaoId: number, leitura: Leitura) {
-    Alert.alert('Excluir leitura', 'Remove esse registro da sessão. Essa ação não pode ser desfeita.', [
+    alertar('Excluir leitura', 'Remove esse registro da sessão. Essa ação não pode ser desfeita.', [
       { text: 'Cancelar', style: 'cancel' },
       {
         text: 'Excluir',

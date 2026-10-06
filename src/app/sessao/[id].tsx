@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Platform,
   Pressable,
@@ -45,6 +44,7 @@ import { formatarDuracao, useCountUpTimer, useElapsedSeconds } from '@/hooks/use
 import { useMonitorFrequenciaCardiaca } from '@/hooks/use-heart-rate-monitor';
 import { useTheme } from '@/hooks/use-theme';
 import { transcreverAudio } from '@/lib/transcricao';
+import { useDialogo } from '@/components/dialogo';
 
 const ICONE_TIPO: Record<Leitura['tipo'], string> = {
   borg: 'directions_run',
@@ -65,6 +65,7 @@ function horario(iso: string) {
 }
 
 export default function SessaoAoVivo() {
+  const alertar = useDialogo();
   const { id } = useLocalSearchParams<{ id: string }>();
   const sessaoId = Number(id);
   const db = useSQLiteContext();
@@ -141,7 +142,7 @@ export default function SessaoAoVivo() {
   }
 
   function confirmarExclusaoLeitura(leitura: Leitura) {
-    Alert.alert('Excluir registro', 'Remove esse registro da sessão. Essa ação não pode ser desfeita.', [
+    alertar('Excluir registro', 'Remove esse registro da sessão. Essa ação não pode ser desfeita.', [
       { text: 'Cancelar', style: 'cancel' },
       {
         text: 'Excluir',
