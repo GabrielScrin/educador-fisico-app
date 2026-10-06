@@ -5,6 +5,7 @@ import { Link, router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { AvatarInitials } from '@/components/avatar-initials';
+import { TabelaClientes } from '@/components/tabela-clientes';
 import { MaterialSymbol } from '@/components/material-symbol';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -13,6 +14,7 @@ import { faixaDoValor, ESCALAS } from '@/constants/scales';
 import { criarSessao, listarClientesComResumo, type ClienteComResumo } from '@/db/queries';
 import { useAuth } from '@/hooks/use-auth';
 import { useSync } from '@/hooks/use-sync';
+import { LARGURA_MAX_CONTEUDO, useLayoutDesktop } from '@/hooks/use-layout-desktop';
 import { useTheme } from '@/hooks/use-theme';
 
 type Filtro = 'todos' | 'hoje' | 'dor';
@@ -52,6 +54,7 @@ export default function ListaClientes() {
   const [busca, setBusca] = useState('');
   const [filtro, setFiltro] = useState<Filtro>('todos');
   const [criando, setCriando] = useState(false);
+  const desktop = useLayoutDesktop();
 
   useFocusEffect(
     useCallback(() => {
@@ -79,79 +82,136 @@ export default function ListaClientes() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-        <View style={styles.header}>
-          <View>
-            <View style={styles.headerEyebrow}>
-              <View style={[styles.pontoPulso, { backgroundColor: theme.accent }]} />
-              <ThemedText type="label" themeColor="textMuted">
-                {textoStatusCabecalho(!!session, estadoSync, ultimaSincronizacao)}
+        {!desktop && (
+          <>
+          <View style={styles.header}>
+            <View>
+              <View style={styles.headerEyebrow}>
+                <View style={[styles.pontoPulso, { backgroundColor: theme.accent }]} />
+                <ThemedText type="label" themeColor="textMuted">
+                  {textoStatusCabecalho(!!session, estadoSync, ultimaSincronizacao)}
+                </ThemedText>
+              </View>
+              <ThemedText type="title" style={styles.headerTitulo}>
+                Clientes
               </ThemedText>
             </View>
-            <ThemedText type="title" style={styles.headerTitulo}>
-              Clientes
-            </ThemedText>
+            <Pressable
+              onPress={() => router.push('/escalas')}
+              hitSlop={10}
+              style={[styles.headerAcao, { backgroundColor: theme.backgroundElement }]}
+            >
+              <MaterialSymbol name="menu_book" size={20} color={theme.textSecondary} />
+            </Pressable>
           </View>
-          <Pressable
-            onPress={() => router.push('/escalas')}
-            hitSlop={10}
-            style={[styles.headerAcao, { backgroundColor: theme.backgroundElement }]}
-          >
-            <MaterialSymbol name="menu_book" size={20} color={theme.textSecondary} />
-          </Pressable>
-        </View>
 
-        <View style={styles.buscaLinha}>
-          <View style={[styles.buscaWrap, { backgroundColor: theme.backgroundElement }]}>
-            <MaterialSymbol name="search" size={20} color={theme.textMuted} />
-            <TextInput
-              value={busca}
-              onChangeText={setBusca}
-              placeholder="Buscar cliente por nome..."
-              placeholderTextColor={theme.textMuted}
-              style={[styles.buscaInput, { color: theme.text }]}
+          <View style={styles.buscaLinha}>
+            <View style={[styles.buscaWrap, { backgroundColor: theme.backgroundElement }]}>
+              <MaterialSymbol name="search" size={20} color={theme.textMuted} />
+              <TextInput
+                value={busca}
+                onChangeText={setBusca}
+                placeholder="Buscar cliente por nome..."
+                placeholderTextColor={theme.textMuted}
+                style={[styles.buscaInput, { color: theme.text }]}
+              />
+            </View>
+            <Link href="/cliente/novo" asChild>
+              <Pressable style={{ ...styles.botaoNovo, backgroundColor: theme.accent }}>
+                <MaterialSymbol name="person_add" size={20} color={theme.onAccent} />
+              </Pressable>
+            </Link>
+          </View>
+
+          <View style={styles.chips}>
+            <Chip label={`Todos (${clientes.length})`} ativo={filtro === 'todos'} onPress={() => setFiltro('todos')} />
+            <Chip label={`Hoje (${totalHoje})`} ativo={filtro === 'hoje'} onPress={() => setFiltro('hoje')} />
+            <Chip
+              label={`Alerta de dor (${totalDor})`}
+              ativo={filtro === 'dor'}
+              icone="warning"
+              cor={theme.warning}
+              onPress={() => setFiltro('dor')}
             />
           </View>
-          <Link href="/cliente/novo" asChild>
-            <Pressable style={{ ...styles.botaoNovo, backgroundColor: theme.accent }}>
-              <MaterialSymbol name="person_add" size={20} color={theme.onAccent} />
-            </Pressable>
-          </Link>
-        </View>
-
-        <View style={styles.chips}>
-          <Chip label={`Todos (${clientes.length})`} ativo={filtro === 'todos'} onPress={() => setFiltro('todos')} />
-          <Chip label={`Hoje (${totalHoje})`} ativo={filtro === 'hoje'} onPress={() => setFiltro('hoje')} />
-          <Chip
-            label={`Alerta de dor (${totalDor})`}
-            ativo={filtro === 'dor'}
-            icone="warning"
-            cor={theme.warning}
-            onPress={() => setFiltro('dor')}
-          />
-        </View>
-
-        <FlatList
-          data={clientesFiltrados}
-          keyExtractor={(item) => String(item.id)}
-          contentContainerStyle={styles.lista}
-          ListEmptyComponent={
-            <View style={styles.vazio}>
-              <ThemedText type="small" themeColor="textSecondary">
-                {clientes.length === 0
-                  ? 'Nenhum cliente ainda. Toque em "+" para começar.'
-                  : 'Nenhum cliente nesse filtro.'}
-              </ThemedText>
+          </>
+        )}
+        {desktop && (
+          <View style={styles.toolbarDesktop}>
+            <View style={styles.tituloDesktopLinha}>
+              <View style={{ flex: 1 }}>
+                <ThemedText type="title">Clientes</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {clientes.length} {clientes.length === 1 ? "cliente" : "clientes"} · {textoStatusCabecalho(!!session, estadoSync, ultimaSincronizacao)}
+                </ThemedText>
+              </View>
+              <Pressable onPress={() => router.push("/escalas")} style={[styles.botaoSecundarioDesktop, { borderColor: theme.border }]}>
+                <MaterialSymbol name="menu_book" size={18} color={theme.textSecondary} />
+                <ThemedText type="smallBold">Escalas</ThemedText>
+              </Pressable>
+              <Pressable onPress={() => router.push("/cliente/novo")} style={[styles.botaoNovoDesktop, { backgroundColor: theme.accent }]}>
+                <MaterialSymbol name="person_add" size={18} color={theme.onAccent} />
+                <ThemedText type="smallBold" style={{ color: theme.onAccent }}>Novo cliente</ThemedText>
+              </Pressable>
             </View>
-          }
-          renderItem={({ item }) => (
-            <ClienteCard
-              cliente={item}
-              onAbrir={() => router.push({ pathname: '/cliente/[id]', params: { id: String(item.id) } })}
-              onIniciar={() => iniciarSessaoImediata(item.id)}
+            <View style={styles.filtrosDesktop}>
+              <View style={[styles.buscaWrap, styles.buscaDesktop, { backgroundColor: theme.backgroundElement }]}>
+                <MaterialSymbol name="search" size={20} color={theme.textMuted} />
+                <TextInput
+                  value={busca}
+                  onChangeText={setBusca}
+                  placeholder="Buscar cliente por nome..."
+                  placeholderTextColor={theme.textMuted}
+                  style={[styles.buscaInput, { color: theme.text }]}
+                />
+              </View>
+              <View style={styles.chips}>
+                <Chip label={`Todos (${clientes.length})`} ativo={filtro === "todos"} onPress={() => setFiltro("todos")} />
+                <Chip label={`Hoje (${totalHoje})`} ativo={filtro === "hoje"} onPress={() => setFiltro("hoje")} />
+                <Chip
+                  label={`Alerta de dor (${totalDor})`}
+                  ativo={filtro === "dor"}
+                  icone="warning"
+                  cor={theme.warning}
+                  onPress={() => setFiltro("dor")}
+                />
+              </View>
+            </View>
+          </View>
+        )}
+        {desktop ? (
+          <View style={styles.areaDesktop}>
+            <TabelaClientes
+              clientes={clientesFiltrados}
+              onAbrir={(c) => router.push({ pathname: "/cliente/[id]", params: { id: String(c.id) } })}
+              onIniciar={(c) => iniciarSessaoImediata(c.id)}
               desabilitado={criando}
             />
-          )}
-        />
+          </View>
+        ) : (
+          <FlatList
+            data={clientesFiltrados}
+            keyExtractor={(item) => String(item.id)}
+            contentContainerStyle={styles.lista}
+            ListEmptyComponent={
+              <View style={styles.vazio}>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {clientes.length === 0
+                    ? 'Nenhum cliente ainda. Toque em "+" para começar.'
+                    : 'Nenhum cliente nesse filtro.'}
+                </ThemedText>
+              </View>
+            }
+            renderItem={({ item }) => (
+              <ClienteCard
+                cliente={item}
+                onAbrir={() => router.push({ pathname: '/cliente/[id]', params: { id: String(item.id) } })}
+                onIniciar={() => iniciarSessaoImediata(item.id)}
+                desabilitado={criando}
+              />
+            )}
+          />
+        )}
       </SafeAreaView>
     </ThemedView>
   );
@@ -294,6 +354,13 @@ function formatarData(iso: string) {
 }
 
 const styles = StyleSheet.create({
+  toolbarDesktop: { gap: Spacing.three, paddingHorizontal: Spacing.four, paddingTop: Spacing.four, paddingBottom: Spacing.three, width: "100%", maxWidth: LARGURA_MAX_CONTEUDO, alignSelf: "center" },
+  tituloDesktopLinha: { flexDirection: "row", alignItems: "center", gap: Spacing.three },
+  botaoNovoDesktop: { flexDirection: "row", alignItems: "center", gap: Spacing.two, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two + 2, borderRadius: Radius.md },
+  botaoSecundarioDesktop: { flexDirection: "row", alignItems: "center", gap: Spacing.two, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two + 2, borderRadius: Radius.md, borderWidth: StyleSheet.hairlineWidth },
+  filtrosDesktop: { flexDirection: "row", alignItems: "center", gap: Spacing.three, flexWrap: "wrap" },
+  buscaDesktop: { flex: 1, minWidth: 260, maxWidth: 420 },
+  areaDesktop: { width: "100%", maxWidth: LARGURA_MAX_CONTEUDO, alignSelf: "center", paddingHorizontal: Spacing.four, flex: 1 },
   container: { flex: 1 },
   safeArea: { flex: 1 },
   header: {
