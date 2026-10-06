@@ -26,6 +26,7 @@ import {
 } from '@/db/queries';
 import { useTheme } from '@/hooks/use-theme';
 import { useDialogo } from '@/components/dialogo';
+import { LARGURA_MAX_CONTEUDO, useLayoutDesktop } from '@/hooks/use-layout-desktop';
 
 function formatarData(iso: string) {
   const d = new Date(iso);
@@ -152,6 +153,8 @@ export default function PerfilCliente() {
     ]);
   }
 
+  const desktop = useLayoutDesktop();
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
@@ -178,6 +181,72 @@ export default function PerfilCliente() {
           </Pressable>
         </View>
 
+        {desktop ? (
+          <ScrollView contentContainerStyle={styles.scrollDesktop} showsVerticalScrollIndicator={false}>
+            <View style={styles.areaDesktop}>
+              <View style={styles.faixaDesktop}>
+                <View style={[styles.card, styles.faixaIdentidade, { backgroundColor: theme.backgroundElement }]}>
+                  <AvatarInitials nome={cliente?.nome ?? '?'} size={56} />
+                  <View style={{ flex: 1 }}>
+                    <ThemedText type="subtitle" numberOfLines={1}>{cliente?.nome ?? '—'}</ThemedText>
+                    {cliente?.contato ? (
+                      <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>{cliente.contato}</ThemedText>
+                    ) : null}
+                    <ThemedText type="small" themeColor="textMuted">
+                      {resumoGeral?.total_sessoes ?? 0} sessões registradas
+                    </ThemedText>
+                  </View>
+                </View>
+                <Pressable
+                  onPress={iniciarSessao}
+                  disabled={criando}
+                  style={[styles.botaoIniciarDesktop, { backgroundColor: theme.accent, opacity: criando ? 0.6 : 1 }]}
+                >
+                  <MaterialSymbol name="play_arrow" size={20} color={theme.onAccent} />
+                  <ThemedText type="smallBold" style={{ color: theme.onAccent }}>Iniciar nova sessão</ThemedText>
+                </Pressable>
+              </View>
+
+              <View style={styles.bento}>
+                <ResumoCard icone="speed" cor={theme.secondary} rotulo="Carga média OMNI" valor={media(resumoGeral?.media_omni ?? null)} />
+                <ResumoCard icone="healing" cor={theme.warning} rotulo="Pico de dor" valor={media(resumoGeral?.pico_dor ?? null)} />
+                <ResumoCard
+                  icone="timer"
+                  cor={theme.accent}
+                  rotulo="Duração média"
+                  valor={resumoGeral?.tempo_medio_min != null ? `${Math.round(resumoGeral.tempo_medio_min)}` : '—'}
+                  unidade="min"
+                />
+              </View>
+
+              {tendenciaOmni.length > 1 ? (
+                <View style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
+                  <ThemedText type="label" themeColor="textMuted">Monitoramento longitudinal</ThemedText>
+                  <ThemedText type="subtitle">Evolução do esforço (OMNI)</ThemedText>
+                  <TrendChart valores={tendenciaOmni} cor={theme.secondary} altura={180} largura={1000} />
+                </View>
+              ) : null}
+
+              <View style={styles.secao}>
+                <ThemedText type="subtitle">Caderneta de sessões</ThemedText>
+                {sessoes.length === 0 ? (
+                  <View style={styles.vazio}>
+                    <ThemedText type="small" themeColor="textSecondary">Nenhuma sessão registrada ainda.</ThemedText>
+                  </View>
+                ) : (
+                  <TabelaSessoes
+                    sessoes={sessoes}
+                    sessaoAberta={sessaoAberta}
+                    leiturasPorSessao={leiturasPorSessao}
+                    onAlternar={alternarSessao}
+                    onOpcoes={abrirOpcoesSessao}
+                    onExcluirLeitura={confirmarExclusaoLeitura}
+                  />
+                )}
+              </View>
+            </View>
+          </ScrollView>
+        ) : (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {/* Cabeçalho do cliente */}
           <View style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
@@ -281,6 +350,7 @@ export default function PerfilCliente() {
             )}
           </View>
         </ScrollView>
+        )}
       </SafeAreaView>
 
       {/* Modal editar nota da sessão */}
@@ -324,6 +394,98 @@ export default function PerfilCliente() {
   );
 }
 
+function TabelaSessoes({
+  sessoes,
+  sessaoAberta,
+  leiturasPorSessao,
+  onAlternar,
+  onOpcoes,
+  onExcluirLeitura,
+}: {
+  sessoes: ResumoSessao[];
+  sessaoAberta: number | null;
+  leiturasPorSessao: Record<number, Leitura[]>;
+  onAlternar: (sessaoId: number) => void;
+  onOpcoes: (sessao: ResumoSessao) => void;
+  onExcluirLeitura: (sessaoId: number, leitura: Leitura) => void;
+}) {
+  const theme = useTheme();
+  return (
+    <View style={[styles.tabela, { borderColor: theme.border }]}>
+      <View style={[styles.tabelaLinha, styles.tabelaCabecalho, { borderBottomColor: theme.border }]}>
+        <ThemedText type="label" themeColor="textMuted" style={styles.tabelaColData}>Data</ThemedText>
+        <ThemedText type="label" themeColor="textMuted" style={styles.tabelaColNum}>Borg</ThemedText>
+        <ThemedText type="label" themeColor="textMuted" style={styles.tabelaColNum}>OMNI</ThemedText>
+        <ThemedText type="label" themeColor="textMuted" style={styles.tabelaColNum}>Dor</ThemedText>
+        <ThemedText type="label" themeColor="textMuted" style={styles.tabelaColNum}>FC</ThemedText>
+        <ThemedText type="label" themeColor="textMuted" style={styles.tabelaColNota}>Nota</ThemedText>
+        <View style={styles.tabelaColAcao} />
+      </View>
+      {sessoes.map((sessao) => {
+        const aberta = sessaoAberta === sessao.id;
+        const leituras = leiturasPorSessao[sessao.id] ?? [];
+        return (
+          <View key={sessao.id}>
+            <Pressable
+              onPress={() => onAlternar(sessao.id)}
+              style={({ hovered }) => [
+                styles.tabelaLinha,
+                { borderBottomColor: theme.borderSubtle },
+                hovered && { backgroundColor: theme.backgroundElement },
+              ]}
+            >
+              <View style={styles.tabelaColData}>
+                <ThemedText type="smallBold">{formatarData(sessao.iniciada_em)}</ThemedText>
+                {!sessao.finalizada_em ? (
+                  <ThemedText type="label" themeColor="accent">Em andamento</ThemedText>
+                ) : null}
+              </View>
+              <ThemedText type="small" style={styles.tabelaColNum}>{media(sessao.media_borg)}</ThemedText>
+              <ThemedText type="small" style={styles.tabelaColNum}>{media(sessao.media_omni)}</ThemedText>
+              <ThemedText type="small" style={styles.tabelaColNum}>{media(sessao.media_dor)}</ThemedText>
+              <ThemedText type="small" style={styles.tabelaColNum}>
+                {sessao.media_fc ? `${Math.round(sessao.media_fc)}` : '—'}
+              </ThemedText>
+              <ThemedText type="small" themeColor="textSecondary" numberOfLines={1} style={styles.tabelaColNota}>
+                {sessao.nota ?? '—'}
+              </ThemedText>
+              <View style={styles.tabelaColAcao}>
+                <Pressable onPress={() => onOpcoes(sessao)} hitSlop={10}>
+                  <MaterialSymbol name="more_vert" size={20} color={theme.textMuted} />
+                </Pressable>
+              </View>
+            </Pressable>
+            {aberta ? (
+              <View style={[styles.tabelaDetalhe, { backgroundColor: theme.backgroundElement }]}>
+                <ThemedText type="label" themeColor="textMuted">Leituras cronológicas</ThemedText>
+                {leituras.length === 0 ? (
+                  <ThemedText type="small" themeColor="textSecondary">Sem leituras registradas.</ThemedText>
+                ) : (
+                  leituras.map((l) => (
+                    <View key={l.id} style={styles.leituraLinha}>
+                      <ThemedText type="small" themeColor="textSecondary">
+                        {new Date(l.registrada_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        {' · '}
+                        {l.tipo.toUpperCase()}
+                      </ThemedText>
+                      <View style={styles.leituraLinhaDir}>
+                        <ThemedText type="small">{l.tipo === 'fc' ? `${Math.round(l.valor)} bpm` : l.valor}</ThemedText>
+                        <Pressable onPress={() => onExcluirLeitura(sessao.id, l)} hitSlop={10}>
+                          <MaterialSymbol name="delete_outline" size={16} color={theme.textMuted} />
+                        </Pressable>
+                      </View>
+                    </View>
+                  ))
+                )}
+              </View>
+            ) : null}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 function ResumoCard({
   icone,
   cor,
@@ -456,7 +618,35 @@ function Metrica({ label, valor }: { label: string; valor: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create({
+  scrollDesktop: { paddingBottom: Spacing.six },
+  areaDesktop: { width: '100%', maxWidth: LARGURA_MAX_CONTEUDO, alignSelf: 'center', padding: Spacing.four, gap: Spacing.four },
+  faixaDesktop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  faixaIdentidade: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  botaoIniciarDesktop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.three,
+    borderRadius: Radius.lg,
+  },
+  tabela: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.lg, overflow: 'hidden' },
+  tabelaLinha: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.three,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  tabelaCabecalho: { paddingVertical: Spacing.two },
+  tabelaColData: { flex: 2.2 },
+  tabelaColNum: { flex: 0.8, textAlign: 'right' },
+  tabelaColNota: { flex: 3, minWidth: 0 },
+  tabelaColAcao: { width: 32, alignItems: 'flex-end' },
+  tabelaDetalhe: { paddingHorizontal: Spacing.four, paddingVertical: Spacing.three, gap: Spacing.two },
+
   container: { flex: 1 },
   safeArea: { flex: 1 },
   header: {

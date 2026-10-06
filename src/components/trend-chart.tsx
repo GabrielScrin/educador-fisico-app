@@ -7,13 +7,13 @@ type Props = {
   min?: number;
   max?: number;
   altura?: number;
+  largura?: number;
 };
 
 // Curva de tendência genérica (SVG) usada tanto na "Curva de Esforço da Sessão" (leituras em
 // tempo real) quanto no gráfico de evolução do prontuário (médias por sessão) — sempre
 // alimentada por dados reais do banco, sem valores de exemplo fixos.
-export function TrendChart({ valores, cor, min = 0, max = 10, altura = 96 }: Props) {
-  const largura = 320;
+export function TrendChart({ valores, cor, min = 0, max = 10, altura = 96, largura = 320 }: Props) {
 
   if (valores.length === 0) {
     return <View style={{ height: altura }} />;
