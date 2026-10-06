@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MaterialSymbol } from '@/components/material-symbol';
 import { Colors, Fonts } from '@/constants/theme';
+import { LARGURA_MAX_CONTEUDO, useLayoutDesktop } from '@/hooks/use-layout-desktop';
 
 const ICONE: Record<string, string> = {
   index: 'group',
@@ -14,18 +15,24 @@ const ICONE: Record<string, string> = {
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
+  const desktop = useLayoutDesktop();
 
   return (
     <Tabs
+      tabBar={desktop ? () => null : undefined}
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarActiveTintColor: Colors.dark.accent,
         tabBarInactiveTintColor: Colors.dark.textMuted,
-        tabBarStyle: [styles.tabBar, { height: 56 + insets.bottom, paddingBottom: insets.bottom }],
+        tabBarStyle: desktop
+          ? undefined
+          : [styles.tabBar, { height: 64 + insets.bottom, paddingBottom: insets.bottom }],
         tabBarLabelStyle: styles.tabLabel,
         tabBarIcon: ({ color, size }) => (
           <MaterialSymbol name={ICONE[route.name] ?? 'circle'} color={color as string} size={size} />
         ),
+        // No desktop, a área das abas fica centralizada numa largura confortável.
+        sceneStyle: desktop ? styles.areaDesktop : undefined,
       })}
     >
       <Tabs.Screen name="index" options={{ title: 'Clientes' }} />
@@ -48,5 +55,11 @@ const styles = StyleSheet.create({
     fontSize: 10,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
+  },
+  areaDesktop: {
+    flex: 1,
+    width: '100%',
+    maxWidth: LARGURA_MAX_CONTEUDO,
+    alignSelf: 'center',
   },
 });

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link } from 'expo-router';
 
@@ -111,7 +111,13 @@ function traduzirErro(mensagem: string): string {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1, justifyContent: 'center' },
-  form: { padding: Spacing.three, gap: Spacing.three },
+  form: {
+    width: '100%',
+    maxWidth: Platform.OS === 'web' ? 420 : undefined,
+    alignSelf: 'center',
+    padding: Spacing.three,
+    gap: Spacing.three,
+  },
   cabecalho: { gap: Spacing.one, marginBottom: Spacing.two },
   avisoErro: {
     borderRadius: Radius.md,

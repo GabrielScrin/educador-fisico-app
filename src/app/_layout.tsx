@@ -12,11 +12,13 @@ import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { SQLiteProvider } from 'expo-sqlite';
 import { useEffect } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View, type ViewStyle } from 'react-native';
 
+import { MenuLateral } from '@/components/menu-lateral';
 import { Colors } from '@/constants/theme';
 import { applyMigrations } from '@/db/migrate';
 import { AuthProvider, useAuth } from '@/hooks/use-auth';
+import { LARGURA_MAX_CONTEUDO, useLayoutDesktop } from '@/hooks/use-layout-desktop';
 import { SyncProvider } from '@/hooks/use-sync';
 import { configurarPwaWeb } from '@/lib/pwa-web';
 
@@ -39,6 +41,10 @@ const NAV_THEME: Theme = {
     heavy: { fontFamily: 'Inter_800ExtraBold', fontWeight: '800' },
   },
 };
+
+// Largura máxima das telas de detalhe na web (no celular fica undefined: a tela já ocupa tudo).
+const AREA_WEB: ViewStyle | undefined =
+  Platform.OS === 'web' ? { flex: 1, width: '100%', maxWidth: LARGURA_MAX_CONTEUDO, alignSelf: 'center' } : undefined;
 
 export default function RootLayout() {
   return (
@@ -71,6 +77,7 @@ function RootNavigator() {
     MaterialSymbols_400Regular,
   });
   const { session, carregando } = useAuth();
+  const desktop = useLayoutDesktop();
   const pronto = fontsLoaded && !carregando;
 
   useEffect(() => {
@@ -91,30 +98,35 @@ function RootNavigator() {
 
   if (!pronto) return null;
 
+  const navegacao = (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Protected guard={!!session}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="cliente/novo" options={{ presentation: 'modal', contentStyle: AREA_WEB }} />
+        <Stack.Screen name="cliente/[id]" options={{ contentStyle: AREA_WEB }} />
+        <Stack.Screen name="cliente/[id]/editar" options={{ presentation: 'modal', contentStyle: AREA_WEB }} />
+        <Stack.Screen name="sessao/[id]" options={{ gestureEnabled: false, contentStyle: AREA_WEB }} />
+        <Stack.Screen name="sessao/[id]/resumo" options={{ gestureEnabled: false, contentStyle: AREA_WEB }} />
+        <Stack.Screen name="escalas" options={{ presentation: 'modal', contentStyle: AREA_WEB }} />
+      </Stack.Protected>
+      <Stack.Protected guard={!session}>
+        <Stack.Screen name="(auth)" />
+      </Stack.Protected>
+    </Stack>
+  );
+
+  // Na web de computador, quem está logado navega por um menu fixo ao lado de todas as telas
+  // (inclusive as de detalhe). Visitante e celular veem só a navegação normal.
   return (
-    // Telas foram desenhadas edge-to-edge pro tamanho de um celular. Na web isso esticava cada
-    // tela pra largura inteira da janela do desktop, ficando distorcido (campos e botões gigantes
-    // numa tela larga) — aqui limitamos a área do app a uma coluna do tamanho de um celular e
-    // centralizamos, com um fundo escuro preenchendo o resto da largura (senão apareceria o branco
-    // padrão do <body>, que nenhuma tela deste app dark-only usa). Sem efeito nativo (o `maxWidth`
-    // nunca é atingido na largura real de um celular).
     <View style={styles.fundoWeb}>
-      <View style={styles.telaWeb}>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Protected guard={!!session}>
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="cliente/novo" options={{ presentation: 'modal' }} />
-            <Stack.Screen name="cliente/[id]" />
-            <Stack.Screen name="cliente/[id]/editar" options={{ presentation: 'modal' }} />
-            <Stack.Screen name="sessao/[id]" options={{ gestureEnabled: false }} />
-            <Stack.Screen name="sessao/[id]/resumo" options={{ gestureEnabled: false }} />
-            <Stack.Screen name="escalas" options={{ presentation: 'modal' }} />
-          </Stack.Protected>
-          <Stack.Protected guard={!session}>
-            <Stack.Screen name="(auth)" />
-          </Stack.Protected>
-        </Stack>
-      </View>
+      {desktop && session ? (
+        <View style={styles.shell}>
+          <MenuLateral />
+          <View style={styles.areaShell}>{navegacao}</View>
+        </View>
+      ) : (
+        navegacao
+      )}
     </View>
   );
 }
@@ -124,8 +136,6 @@ const styles = StyleSheet.create({
     web: { flex: 1, width: '100%', backgroundColor: Colors.dark.background },
     default: { flex: 1 },
   }),
-  telaWeb: Platform.select({
-    web: { flex: 1, width: '100%', maxWidth: 480, alignSelf: 'center' },
-    default: { flex: 1 },
-  }),
+  shell: { flex: 1, flexDirection: 'row' },
+  areaShell: { flex: 1, minWidth: 0 },
 });
