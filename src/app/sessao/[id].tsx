@@ -42,6 +42,7 @@ import {
 } from '@/db/queries';
 import { formatarDuracao, useCountUpTimer, useElapsedSeconds } from '@/hooks/use-elapsed-timer';
 import { useMonitorFrequenciaCardiaca } from '@/hooks/use-heart-rate-monitor';
+import { LARGURA_MAX_CONTEUDO, useLayoutDesktop } from '@/hooks/use-layout-desktop';
 import { useTheme } from '@/hooks/use-theme';
 import { transcreverAudio } from '@/lib/transcricao';
 import { useDialogo } from '@/components/dialogo';
@@ -70,6 +71,7 @@ export default function SessaoAoVivo() {
   const sessaoId = Number(id);
   const db = useSQLiteContext();
   const theme = useTheme();
+  const desktop = useLayoutDesktop();
 
   const [cliente, setCliente] = useState<Cliente | null>(null);
   const [sessao, setSessao] = useState<Sessao | null>(null);
@@ -215,39 +217,9 @@ export default function SessaoAoVivo() {
     router.push({ pathname: '/sessao/[id]/resumo', params: { id: String(sessaoId) } });
   }
 
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-        {/* Header */}
-        <View style={[styles.header, { borderBottomColor: theme.border }]}>
-          <Pressable onPress={() => router.back()} hitSlop={12} style={styles.headerBotaoVoltar}>
-            <MaterialSymbol name="arrow_back" size={22} color={theme.textSecondary} />
-          </Pressable>
-          <View style={{ flex: 1 }}>
-            <View style={styles.headerTopo}>
-              <View style={[styles.pontoPulso, { backgroundColor: theme.accent }]} />
-              <ThemedText type="label" themeColor="accent" numberOfLines={1} style={styles.headerLabel}>
-                Sessão em andamento
-              </ThemedText>
-              <ThemedText type="smallBold" style={styles.headerTimer} numberOfLines={1}>
-                {formatarDuracao(tempoTotal)}
-              </ThemedText>
-            </View>
-            <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
-              {cliente?.nome ?? '—'}
-            </ThemedText>
-          </View>
-          <Pressable
-            onPress={irParaResumo}
-            style={[styles.headerBotaoFinalizar, { backgroundColor: theme.danger }]}
-          >
-            <MaterialSymbol name="check_circle" size={16} color={theme.text} />
-            <ThemedText type="smallBold">Finalizar</ThemedText>
-          </Pressable>
-        </View>
-
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          {/* HUD do cliente */}
+  // Blocos da sessão: no celular são empilhados na ordem original; no desktop viram duas colunas.
+  const blocoA = (
+    <>
           <View style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
             <View style={styles.hudTopo}>
               <View style={styles.hudCliente}>
@@ -291,8 +263,6 @@ export default function SessaoAoVivo() {
                 </View>
               </View>
             </View>
-
-            {/* Micro telemetria */}
             <View style={styles.microGrid}>
               <MicroTelemetria
                 icone="favorite"
@@ -318,7 +288,10 @@ export default function SessaoAoVivo() {
             </View>
           </View>
 
-          {/* Curva de esforço */}
+    </>
+  );
+  const blocoB = (
+    <>
           {curvaEsforco.length > 1 ? (
             <View style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
               <View style={styles.linhaTitulo}>
@@ -333,8 +306,6 @@ export default function SessaoAoVivo() {
               <TrendChart valores={curvaEsforco} cor={theme.secondary} />
             </View>
           ) : null}
-
-          {/* Registros da sessão */}
           <View style={styles.secao}>
             <View style={styles.linhaTitulo}>
               <MaterialSymbol name="history" size={18} color={theme.textMuted} />
@@ -392,7 +363,10 @@ export default function SessaoAoVivo() {
             )}
           </View>
 
-          {/* Registro instantâneo 2x2 */}
+    </>
+  );
+  const blocoC = (
+    <>
           <View style={styles.secao}>
             <View style={styles.linhaTitulo}>
               <MaterialSymbol name="touch_app" size={18} color={theme.accent} />
@@ -436,6 +410,62 @@ export default function SessaoAoVivo() {
               />
             </View>
           </View>
+    </>
+  );
+
+  return (
+    <ThemedView style={styles.container}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+        {/* Header */}
+        <View style={[styles.header, { borderBottomColor: theme.border }]}>
+          <Pressable onPress={() => router.back()} hitSlop={12} style={styles.headerBotaoVoltar}>
+            <MaterialSymbol name="arrow_back" size={22} color={theme.textSecondary} />
+          </Pressable>
+          <View style={{ flex: 1 }}>
+            <View style={styles.headerTopo}>
+              <View style={[styles.pontoPulso, { backgroundColor: theme.accent }]} />
+              <ThemedText type="label" themeColor="accent" numberOfLines={1} style={styles.headerLabel}>
+                Sessão em andamento
+              </ThemedText>
+              <ThemedText type="smallBold" style={styles.headerTimer} numberOfLines={1}>
+                {formatarDuracao(tempoTotal)}
+              </ThemedText>
+            </View>
+            <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+              {cliente?.nome ?? '—'}
+            </ThemedText>
+          </View>
+          <Pressable
+            onPress={irParaResumo}
+            style={[styles.headerBotaoFinalizar, { backgroundColor: theme.danger }]}
+          >
+            <MaterialSymbol name="check_circle" size={16} color={theme.text} />
+            <ThemedText type="smallBold">Finalizar</ThemedText>
+          </Pressable>
+        </View>
+
+        <ScrollView contentContainerStyle={desktop ? styles.scrollDesktop : styles.scroll} showsVerticalScrollIndicator={false}>
+        {desktop ? (
+          <View style={styles.linhaDesktopSessao}>
+            <View style={styles.colunaDesktop}>
+              {blocoA}
+              {blocoC}
+            </View>
+            <View style={[styles.colunaDesktop, styles.colunaDireitaDesktop]}>
+              {blocoB}
+            </View>
+          </View>
+        ) : (
+          <>
+            <View style={styles.colunaMobile}>
+              {blocoA}
+            </View>
+            <View style={styles.colunaMobile}>
+              {blocoB}
+            </View>
+            {blocoC}
+          </>
+        )}
         </ScrollView>
 
         {/* Barra inferior */}
@@ -804,7 +834,13 @@ function TileEscala({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create({
+  scrollDesktop: { padding: Spacing.four, flexGrow: 1 },
+  linhaDesktopSessao: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.four, width: '100%', maxWidth: LARGURA_MAX_CONTEUDO, alignSelf: 'center' },
+  colunaDesktop: { flex: 1, gap: Spacing.three, minWidth: 0 },
+  colunaDireitaDesktop: { flex: 1.2 },
+  colunaMobile: { gap: Spacing.three },
+
   container: { flex: 1 },
   safeArea: { flex: 1 },
   header: {

@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -12,12 +12,14 @@ import { ESCALAS, faixaDoValor, type TipoEscala } from '@/constants/scales';
 import { Radius, Spacing } from '@/constants/theme';
 import { listarSessoesEmAndamento, type SessaoEmAndamento } from '@/db/queries';
 import { formatarDuracao, useElapsedSeconds } from '@/hooks/use-elapsed-timer';
+import { LARGURA_MAX_CONTEUDO, useLayoutDesktop } from '@/hooks/use-layout-desktop';
 import { useTheme } from '@/hooks/use-theme';
 
 export default function TreinoAtivo() {
   const db = useSQLiteContext();
   const theme = useTheme();
   const [sessoes, setSessoes] = useState<SessaoEmAndamento[]>([]);
+  const desktop = useLayoutDesktop();
 
   useFocusEffect(
     useCallback(() => {
@@ -25,6 +27,51 @@ export default function TreinoAtivo() {
     }, [db]),
   );
 
+  if (desktop) {
+    return (
+      <ThemedView style={styles.container}>
+        <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+          <ScrollView contentContainerStyle={styles.scrollDesktop} showsVerticalScrollIndicator={false}>
+            <View style={styles.areaDesktop}>
+              <View style={styles.cabecalhoDesktop}>
+                <ThemedText type="title">Treino ativo</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {sessoes.length} {sessoes.length === 1 ? 'sessão em andamento' : 'sessões em andamento'}
+                </ThemedText>
+              </View>
+              {sessoes.length === 0 ? (
+                <View style={[styles.vazioDesktop, { backgroundColor: theme.backgroundElement }]}>
+                  <MaterialSymbol name="ecg_heart" size={32} color={theme.textMuted} />
+                  <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center' }}>
+                    Nenhuma sessão em andamento agora.{'\n'}Inicie uma pelo cadastro do cliente.
+                  </ThemedText>
+                </View>
+              ) : (
+                <View style={[styles.tabelaDesktop, { borderColor: theme.border }]}>
+                  <View style={[styles.linhaDesktop, styles.cabecalhoTabela, { borderBottomColor: theme.border }]}>
+                    <ThemedText type="label" themeColor="textMuted" style={styles.colCliente}>Cliente</ThemedText>
+                    <ThemedText type="label" themeColor="textMuted" style={styles.colUltima}>Último registro</ThemedText>
+                    <ThemedText type="label" themeColor="textMuted" style={styles.colRegistros}>Registros</ThemedText>
+                    <ThemedText type="label" themeColor="textMuted" style={styles.colTempo}>Tempo</ThemedText>
+                    <View style={styles.colAcao} />
+                  </View>
+                  {sessoes.map((sessao) => (
+                    <LinhaSessaoDesktop
+                      key={sessao.id}
+                      sessao={sessao}
+                      onPress={() => router.push({ pathname: '/sessao/[id]', params: { id: String(sessao.id) } })}
+                    />
+                  ))}
+                </View>
+              )}
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </ThemedView>
+    );
+  }
+
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -71,6 +118,39 @@ function rotuloUltimaLeitura(item: SessaoEmAndamento) {
   return `${escala.titulo.split(' ')[0]} ${item.ultimo_valor} — ${faixaDoValor(escala, item.ultimo_valor).rotulo}`;
 }
 
+function LinhaSessaoDesktop({ sessao, onPress }: { sessao: SessaoEmAndamento; onPress: () => void }) {
+  const theme = useTheme();
+  const decorridos = useElapsedSeconds(sessao.iniciada_em);
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ hovered }) => [
+        styles.linhaDesktop,
+        { borderBottomColor: theme.borderSubtle },
+        hovered && { backgroundColor: theme.backgroundElement },
+      ]}
+    >
+      <View style={[styles.colCliente, styles.clienteDesktop]}>
+        <AvatarInitials nome={sessao.cliente_nome} size={32} />
+        <ThemedText type="smallBold" numberOfLines={1} style={{ flex: 1 }}>
+          {sessao.cliente_nome}
+        </ThemedText>
+      </View>
+      <ThemedText type="small" themeColor="textSecondary" numberOfLines={1} style={styles.colUltima}>
+        {rotuloUltimaLeitura(sessao)}
+      </ThemedText>
+      <ThemedText type="small" style={styles.colRegistros}>{sessao.total_leituras}</ThemedText>
+      <View style={[styles.colTempo, styles.timerDesktop]}>
+        <MaterialSymbol name="timer" size={14} color={theme.accent} />
+        <ThemedText type="smallBold" themeColor="accent">{formatarDuracao(decorridos)}</ThemedText>
+      </View>
+      <View style={styles.colAcao}>
+        <ThemedText type="smallBold" themeColor="accent">Continuar</ThemedText>
+      </View>
+    </Pressable>
+  );
+}
+
 function SessaoCard({ sessao, onPress }: { sessao: SessaoEmAndamento; onPress: () => void }) {
   const theme = useTheme();
   const decorridos = useElapsedSeconds(sessao.iniciada_em);
@@ -115,7 +195,22 @@ function SessaoCard({ sessao, onPress }: { sessao: SessaoEmAndamento; onPress: (
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create({
+  scrollDesktop: { paddingBottom: Spacing.six },
+  areaDesktop: { width: '100%', maxWidth: LARGURA_MAX_CONTEUDO, alignSelf: 'center', padding: Spacing.four, gap: Spacing.four },
+  cabecalhoDesktop: { gap: Spacing.one },
+  vazioDesktop: { alignItems: 'center', justifyContent: 'center', gap: Spacing.two, borderRadius: Radius.lg, padding: Spacing.six },
+  tabelaDesktop: { borderWidth: StyleSheet.hairlineWidth, borderRadius: Radius.lg, overflow: 'hidden' },
+  linhaDesktop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingHorizontal: Spacing.three, paddingVertical: Spacing.three, borderBottomWidth: StyleSheet.hairlineWidth },
+  cabecalhoTabela: { paddingVertical: Spacing.two },
+  clienteDesktop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  timerDesktop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
+  colCliente: { flex: 3, minWidth: 0 },
+  colUltima: { flex: 3, minWidth: 0 },
+  colRegistros: { flex: 1, textAlign: 'right' },
+  colTempo: { flex: 1.4 },
+  colAcao: { flex: 1.2, alignItems: 'flex-end' },
+
   container: { flex: 1 },
   safeArea: { flex: 1 },
   header: { paddingHorizontal: Spacing.three, paddingTop: Spacing.one },

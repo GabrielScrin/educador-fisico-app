@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 import type { Device, Subscription } from 'react-native-ble-plx';
 
 import {
@@ -25,6 +26,8 @@ export function useMonitorFrequenciaCardiaca() {
   const assinatura = useRef<Subscription | null>(null);
 
   const pararScan = useCallback(() => {
+    // Na web não existe Bluetooth: não tocar no BleManager (ele não existe lá e derrubava a tela ao sair da sessão).
+    if (Platform.OS === 'web') return;
     obterBleManager()
       .stopDeviceScan()
       .catch(() => {});

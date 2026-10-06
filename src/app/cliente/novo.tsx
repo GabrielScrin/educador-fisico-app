@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -97,7 +97,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerBotao: { width: 36, height: 36, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
-  form: { padding: Spacing.three, gap: Spacing.three },
+  form: {
+    width: '100%',
+    maxWidth: Platform.OS === 'web' ? 520 : undefined,
+    alignSelf: 'center',
+    padding: Spacing.three,
+    gap: Spacing.three,
+  },
   campo: { gap: Spacing.one },
   input: {
     borderRadius: Radius.md,

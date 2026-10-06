@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -11,10 +11,13 @@ import { ThemedView } from '@/components/themed-view';
 import { Radius, Spacing } from '@/constants/theme';
 import {
   buscarResumoGeralApp,
+  criarSessao,
   listarClientesComResumo,
   type ClienteComResumo,
   type ResumoGeralApp,
 } from '@/db/queries';
+import { TabelaClientes } from '@/components/tabela-clientes';
+import { LARGURA_MAX_CONTEUDO, useLayoutDesktop } from '@/hooks/use-layout-desktop';
 import { useTheme } from '@/hooks/use-theme';
 
 function inicioDaSemana() {
@@ -42,6 +45,8 @@ export default function Evolucao() {
   const theme = useTheme();
   const [resumo, setResumo] = useState<ResumoGeralApp | null>(null);
   const [clientes, setClientes] = useState<ClienteComResumo[]>([]);
+  const [iniciando, setIniciando] = useState(false);
+  const desktop = useLayoutDesktop();
 
   useFocusEffect(
     useCallback(() => {
@@ -56,6 +61,49 @@ export default function Evolucao() {
       .sort((a, b) => (b.ultima_sessao_em ?? '').localeCompare(a.ultima_sessao_em ?? ''));
   }, [clientes]);
 
+  async function iniciarSessaoRapida(clienteId: number) {
+    if (iniciando) return;
+    setIniciando(true);
+    const sessaoId = await criarSessao(db, clienteId);
+    setIniciando(false);
+    router.push({ pathname: '/sessao/[id]', params: { id: String(sessaoId) } });
+  }
+
+  if (desktop) {
+    return (
+      <ThemedView style={styles.container}>
+        <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+          <ScrollView contentContainerStyle={styles.scrollDesktop} showsVerticalScrollIndicator={false}>
+            <View style={styles.areaDesktop}>
+              <View style={styles.cabecalhoDesktop}>
+                <ThemedText type="title">Evolução</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">Visão geral do consultório</ThemedText>
+              </View>
+              <View style={styles.statsDesktop}>
+                <StatCard icone="event_available" cor={theme.accent} rotulo="Sessões na semana" valor={resumo?.sessoes_semana ?? 0} />
+                <StatCard icone="groups" cor={theme.secondary} rotulo="Ativos (30 dias)" valor={resumo?.clientes_ativos_mes ?? 0} />
+                <StatCard icone="warning" cor={theme.warning} rotulo="Alertas de dor" valor={resumo?.alertas_dor ?? 0} />
+              </View>
+              <View style={styles.secaoDesktop}>
+                <ThemedText type="subtitle">Clientes por atividade recente</ThemedText>
+                {clientesOrdenados.length === 0 ? (
+                  <ThemedText type="small" themeColor="textSecondary">Nenhum cliente cadastrado ainda.</ThemedText>
+                ) : (
+                  <TabelaClientes
+                    clientes={clientesOrdenados}
+                    onAbrir={(c) => router.push({ pathname: '/cliente/[id]', params: { id: String(c.id) } })}
+                    onIniciar={(c) => iniciarSessaoRapida(c.id)}
+                    desabilitado={iniciando}
+                  />
+                )}
+              </View>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </ThemedView>
+    );
+  }
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -170,7 +218,13 @@ function MiniMetrica({ rotulo, valor, cor }: { rotulo: string; valor: string; co
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create({
+  scrollDesktop: { paddingBottom: Spacing.six },
+  areaDesktop: { width: '100%', maxWidth: LARGURA_MAX_CONTEUDO, alignSelf: 'center', padding: Spacing.four, gap: Spacing.four },
+  cabecalhoDesktop: { gap: Spacing.one },
+  statsDesktop: { flexDirection: 'row', gap: Spacing.three },
+  secaoDesktop: { gap: Spacing.three },
+
   container: { flex: 1 },
   safeArea: { flex: 1 },
   header: { paddingHorizontal: Spacing.three, paddingTop: Spacing.one },
